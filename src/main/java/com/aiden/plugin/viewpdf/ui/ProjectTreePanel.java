@@ -22,6 +22,7 @@ import java.util.Comparator;
 import java.util.function.Consumer;
 import java.awt.Color;
 import java.awt.Component;
+import java.awt.Font;
 
 public final class ProjectTreePanel implements Disposable {
     private static final Object PLACEHOLDER = new Object();
@@ -30,9 +31,11 @@ public final class ProjectTreePanel implements Disposable {
     private final DefaultTreeModel model;
     private final JBScrollPane component;
     private final Consumer<VirtualFile> onFileClicked;
-    private Color backgroundColor;
+    private Color backgroundColor = new Color(43, 45, 48);
+    private Color textColor = new Color(220, 220, 220);
+    private int fontSize = 12;
 
-    public ProjectTreePanel(@NotNull Project project, @NotNull DisguisePanel disguisePanel, @NotNull Consumer<VirtualFile> onFileClicked) {
+    public ProjectTreePanel(@NotNull Project project, @NotNull Consumer<VirtualFile> onFileClicked) {
         this.onFileClicked = onFileClicked;
         VirtualFile rootDir = guessRootDir(project);
         DefaultMutableTreeNode rootNode = rootDir == null
@@ -51,12 +54,10 @@ public final class ProjectTreePanel implements Disposable {
                         setText(vf.getName());
                     }
                 }
-                if (backgroundColor != null) {
-                    setBackgroundNonSelectionColor(backgroundColor);
-                    setTextNonSelectionColor(Color.WHITE);
-                    setBackgroundSelectionColor(backgroundColor.darker());
-                    setTextSelectionColor(Color.WHITE);
-                }
+                setBackgroundNonSelectionColor(backgroundColor);
+                setTextNonSelectionColor(textColor);
+                setBackgroundSelectionColor(backgroundColor.darker());
+                setTextSelectionColor(textColor);
                 return this;
             }
         });
@@ -85,11 +86,11 @@ public final class ProjectTreePanel implements Disposable {
             Object userObject = node.getUserObject();
             if (userObject instanceof VirtualFile vf && !vf.isDirectory()) {
                 this.onFileClicked.accept(vf);
-                disguisePanel.setFile(vf);
             }
         });
 
         component = new JBScrollPane(tree);
+        applyTreeStyle();
     }
 
     public @NotNull JComponent getComponent() {
@@ -98,11 +99,36 @@ public final class ProjectTreePanel implements Disposable {
 
     public void setBackgroundColor(@NotNull Color color) {
         backgroundColor = color;
+        applyTreeStyle();
+    }
+
+    public void setTextColor(@NotNull Color color) {
+        textColor = color;
+        applyTreeStyle();
+    }
+
+    public void setFontSize(int size) {
+        fontSize = Math.max(8, Math.min(32, size));
+        applyTreeStyle();
+    }
+
+    public void setStyle(@NotNull Color bgColor, @NotNull Color fgColor, int size) {
+        backgroundColor = bgColor;
+        textColor = fgColor;
+        fontSize = Math.max(8, Math.min(32, size));
+        applyTreeStyle();
+    }
+
+    private void applyTreeStyle() {
         component.setOpaque(true);
         component.getViewport().setOpaque(true);
-        component.getViewport().setBackground(color);
+        component.getViewport().setBackground(backgroundColor);
         tree.setOpaque(true);
-        tree.setBackground(color);
+        tree.setBackground(backgroundColor);
+        Font font = tree.getFont();
+        if (font != null) {
+            tree.setFont(font.deriveFont((float) fontSize));
+        }
         tree.repaint();
     }
 

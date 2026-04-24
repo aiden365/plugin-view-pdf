@@ -16,6 +16,7 @@ import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.SwingWorker;
+import javax.swing.Timer;
 import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Component;
@@ -24,6 +25,9 @@ import java.awt.Graphics2D;
 import java.awt.event.MouseAdapter;
 import java.awt.image.BufferedImage;
 import java.io.File;
+import java.util.Objects;
+import java.util.function.BiConsumer;
+import java.util.function.Function;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -40,6 +44,18 @@ public final class PdfViewerPanel implements Disposable {
     private Color textColor = new Color(220, 220, 220);
     private MouseAdapter regionMouseListener;
     private int zoomPercent = 100;
+    private @Nullable String currentPdfPath;
+    private int pendingRestoreScrollValue;
+    private @Nullable Function<String, Integer> readingPositionLoader;
+    private @Nullable BiConsumer<String, Integer> readingPositionSaver;
+    private boolean suppressAutoSave;
+    private @Nullable Timer restoreTimer;
+    private boolean hasRenderedDocument;
+    private @Nullable String renderedPdfPath;
+    private boolean renderedNightMode;
+    private int renderedZoomPercent = 100;
+    private @NotNull Color renderedTextColor = new Color(220, 220, 220);
+    private @NotNull Color renderedBackgroundColor = DEFAULT_BACKGROUND;
 
     private final AtomicInteger loadSeq = new AtomicInteger(0);
     private SwingWorker<Void, PageUpdate> worker;
@@ -55,6 +71,7 @@ public final class PdfViewerPanel implements Disposable {
         pagesPanel.setLayout(new javax.swing.BoxLayout(pagesPanel, javax.swing.BoxLayout.Y_AXIS));
         scrollPane = new JBScrollPane(pagesPanel);
         scrollPane.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
+        scrollPane.getVerticalScrollBar().addAdjustmentListener(e -> saveCurrentReadingPosition());
     }
 
     public @NotNull JComponent getComponent() {
@@ -86,18 +103,45 @@ public final class PdfViewerPanel implements Disposable {
         textColor = color == null ? new Color(220, 220, 220) : color;
     }
 
+    public void setReadingPositionHandlers(
+            @Nullable Function<String, Integer> loader,
+            @Nullable BiConsumer<String, Integer> saver
+    ) {
+        readingPositionLoader = loader;
+        readingPositionSaver = saver;
+    }
+
+    public void saveReadingPositionNow() {
+        saveCurrentReadingPosition();
+    }
+
+    public void ensureLoaded(@Nullable String pdfPath, boolean nightModeEnabled) {
+        String normalized = normalizePdfPath(pdfPath);
+        if (!shouldReload(normalized, nightModeEnabled)) {
+            return;
+        }
+        reload(pdfPath, nightModeEnabled);
+    }
+
     public void reload(@Nullable String pdfPath, boolean nightModeEnabled) {
         int seq = loadSeq.incrementAndGet();
+        cancelRestoreTimer();
         cancelWorker();
+        saveCurrentReadingPosition();
+        suppressAutoSave = true;
+        currentPdfPath = normalizePdfPath(pdfPath);
+        pendingRestoreScrollValue = getSavedReadingPosition(currentPdfPath);
 
         if (pdfPath == null) {
             showMessage("未选择 PDF，请在 Settings: XCode Viewer 中选择。");
+            suppressAutoSave = false;
             return;
         }
 
         File file = new File(pdfPath);
         if (!file.exists() || !file.isFile()) {
             showMessage("找不到 PDF 文件: " + pdfPath);
+            suppressAutoSave = false;
             return;
         }
 
@@ -150,10 +194,23 @@ public final class PdfViewerPanel implements Disposable {
                 try {
                     get();
                     if (pagesPanel.getComponentCount() == 0) {
+                        hasRenderedDocument = false;
                         showMessage("PDF 为空。");
+                        pendingRestoreScrollValue = 0;
+                        suppressAutoSave = false;
+                    } else {
+                        hasRenderedDocument = true;
+                        renderedPdfPath = normalizePdfPath(pdfPath);
+                        renderedNightMode = nightModeEnabled;
+                        renderedZoomPercent = zoomPercent;
+                        renderedTextColor = textColor;
+                        renderedBackgroundColor = backgroundColor == null ? DEFAULT_BACKGROUND : backgroundColor;
+                        restoreReadingPosition();
                     }
                 } catch (Exception e) {
+                    hasRenderedDocument = false;
                     showMessage("加载 PDF 失败: " + e.getMessage());
+                    suppressAutoSave = false;
                 }
             }
         };
@@ -170,6 +227,61 @@ public final class PdfViewerPanel implements Disposable {
         sp.getVerticalScrollBar().setValue(value);
     }
 
+    private int getSavedReadingPosition(@Nullable String pdfPath) {
+        if (pdfPath == null || readingPositionLoader == null) {
+            return 0;
+        }
+        Integer value = readingPositionLoader.apply(pdfPath);
+        return value == null ? 0 : Math.max(0, value);
+    }
+
+    private void saveCurrentReadingPosition() {
+        if (suppressAutoSave || currentPdfPath == null || readingPositionSaver == null) {
+            return;
+        }
+        if (root.getComponentCount() == 0 || root.getComponent(0) != scrollPane || pagesPanel.getComponentCount() == 0) {
+            return;
+        }
+        int value = Math.max(0, scrollPane.getVerticalScrollBar().getValue());
+        readingPositionSaver.accept(currentPdfPath, value);
+    }
+
+    private void restoreReadingPosition() {
+        int targetValue = Math.max(0, pendingRestoreScrollValue);
+        pendingRestoreScrollValue = 0;
+        cancelRestoreTimer();
+        ApplicationManager.getApplication().invokeLater(() -> {
+            final int[] retries = {0};
+            restoreTimer = new Timer(80, e -> {
+                var bar = scrollPane.getVerticalScrollBar();
+                int maxScrollable = Math.max(0, bar.getMaximum() - bar.getVisibleAmount());
+                int expected = Math.min(targetValue, maxScrollable);
+                if (bar.getValue() != expected) {
+                    bar.setValue(expected);
+                }
+                retries[0]++;
+                boolean reached = Math.abs(bar.getValue() - expected) <= 1;
+                boolean exhausted = retries[0] >= 10;
+                if (reached || exhausted) {
+                    ((Timer) e.getSource()).stop();
+                    restoreTimer = null;
+                    suppressAutoSave = false;
+                    saveCurrentReadingPosition();
+                }
+            });
+            restoreTimer.setInitialDelay(0);
+            restoreTimer.start();
+        });
+    }
+
+    private static @Nullable String normalizePdfPath(@Nullable String pdfPath) {
+        if (pdfPath == null) {
+            return null;
+        }
+        String trimmed = pdfPath.trim();
+        return trimmed.isEmpty() ? null : trimmed;
+    }
+
     private void cancelWorker() {
         SwingWorker<Void, PageUpdate> w = worker;
         if (w != null) {
@@ -178,9 +290,18 @@ public final class PdfViewerPanel implements Disposable {
         }
     }
 
+    private void cancelRestoreTimer() {
+        Timer timer = restoreTimer;
+        if (timer != null) {
+            timer.stop();
+            restoreTimer = null;
+        }
+    }
+
     private void showMessage(@NotNull String message) {
         ApplicationManager.getApplication().invokeLater(() -> {
             cancelWorker();
+            hasRenderedDocument = false;
             pagesPanel.removeAll();
             root.removeAll();
             messageLabel.setText(message);
@@ -189,6 +310,29 @@ public final class PdfViewerPanel implements Disposable {
             root.revalidate();
             root.repaint();
         });
+    }
+
+    private boolean shouldReload(@Nullable String normalizedPdfPath, boolean nightModeEnabled) {
+        if (!hasRenderedDocument) {
+            return true;
+        }
+        if (!Objects.equals(renderedPdfPath, normalizedPdfPath)) {
+            return true;
+        }
+        if (renderedNightMode != nightModeEnabled) {
+            return true;
+        }
+        if (renderedZoomPercent != zoomPercent) {
+            return true;
+        }
+        if (!renderedTextColor.equals(textColor)) {
+            return true;
+        }
+        if (nightModeEnabled) {
+            Color currentBg = backgroundColor == null ? DEFAULT_BACKGROUND : backgroundColor;
+            return !renderedBackgroundColor.equals(currentBg);
+        }
+        return false;
     }
 
     private void showLoading() {
@@ -308,6 +452,8 @@ public final class PdfViewerPanel implements Disposable {
 
     @Override
     public void dispose() {
+        saveCurrentReadingPosition();
+        cancelRestoreTimer();
         cancelWorker();
     }
 

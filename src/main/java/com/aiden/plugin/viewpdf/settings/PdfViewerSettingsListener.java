@@ -21,4 +21,14 @@ public interface PdfViewerSettingsListener {
     void zoomPercentChanged(int percent);
 
     void pdfTextColorChanged(@NotNull Color newTextColor);
+
+    void treeBackgroundChanged(@NotNull Color newBackgroundColor);
+
+    void treeTextColorChanged(@NotNull Color newTextColor);
+
+    void treeFontSizeChanged(int size);
+
+    void paneRatiosChanged(int leftPercent, int middlePercent, int rightPercent);
+
+    void thirdPaneVisibilityChanged(boolean visible);
 }

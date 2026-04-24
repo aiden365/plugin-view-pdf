@@ -28,15 +28,27 @@ public final class PdfViewerToolWindowFactory implements ToolWindowFactory, Dumb
 
         PdfViewerSettings settings = PdfViewerSettings.getInstance();
         splitPanel.setPdfBackgroundColor(settings.getPdfBackgroundColor());
+        splitPanel.setTreeStyle(
+                settings.getTreeBackgroundColor(),
+                settings.getTreeTextColor(),
+                settings.getTreeFontSize()
+        );
+        splitPanel.setPaneRatios(
+                settings.getPaneLeftPercent(),
+                settings.getPaneMiddlePercent(),
+                settings.getPaneRightPercent()
+        );
+        splitPanel.setThirdPaneVisible(settings.isThirdPaneVisible());
         splitPanel.setHoverSeconds(settings.getAutoShowPdfHoverSeconds());
         splitPanel.getPdfPanel().setZoomPercent(settings.getPdfZoomPercent());
         splitPanel.getPdfPanel().setTextColor(settings.getPdfTextColor());
+        splitPanel.getPdfPanel().setReadingPositionHandlers(settings::getPdfReadPosition, settings::setPdfReadPosition);
         splitPanel.setPdfToggleEnabled(false);
         splitPanel.showDisguise();
         splitPanel.setOnPdfShownCallback(() -> controller.setPdfVisible(true));
         splitPanel.setOnDisguiseShownCallback(() -> controller.setPdfVisible(false));
         splitPanel.setAutoShowPdfCallback(() ->
-                splitPanel.getPdfPanel().reload(settings.getPdfPath(), settings.isNightModeEnabled())
+                splitPanel.getPdfPanel().ensureLoaded(settings.getPdfPath(), settings.isNightModeEnabled())
         );
 
         ApplicationManager.getApplication()
@@ -45,15 +57,13 @@ public final class PdfViewerToolWindowFactory implements ToolWindowFactory, Dumb
                 .subscribe(PdfViewerSettingsListener.TOPIC, new PdfViewerSettingsListener() {
                     @Override
                     public void pdfPathChanged(String newPdfPath) {
-                        if (controller.isPdfVisible()) {
-                            controller.getPdfPanel().reload(newPdfPath, settings.isNightModeEnabled());
-                        }
+                        controller.getPdfPanel().ensureLoaded(newPdfPath, settings.isNightModeEnabled());
                     }
 
                     @Override
                     public void nightModeChanged(boolean enabled) {
                         if (controller.isPdfVisible()) {
-                            controller.getPdfPanel().reload(settings.getPdfPath(), enabled);
+                            controller.getPdfPanel().ensureLoaded(settings.getPdfPath(), enabled);
                         }
                     }
 
@@ -70,20 +80,47 @@ public final class PdfViewerToolWindowFactory implements ToolWindowFactory, Dumb
                     @Override
                     public void zoomPercentChanged(int percent) {
                         splitPanel.getPdfPanel().setZoomPercent(percent);
-                        if (controller.isPdfVisible()) {
-                            controller.getPdfPanel().reload(settings.getPdfPath(), settings.isNightModeEnabled());
-                        }
+                        controller.getPdfPanel().ensureLoaded(settings.getPdfPath(), settings.isNightModeEnabled());
                     }
 
                     @Override
                     public void pdfTextColorChanged(@NotNull java.awt.Color newTextColor) {
                         splitPanel.getPdfPanel().setTextColor(newTextColor);
-                        if (controller.isPdfVisible()) {
-                            controller.getPdfPanel().reload(settings.getPdfPath(), settings.isNightModeEnabled());
+                        if (controller.isPdfVisible() && settings.isNightModeEnabled()) {
+                            controller.getPdfPanel().ensureLoaded(settings.getPdfPath(), settings.isNightModeEnabled());
                         }
+                    }
+
+                    @Override
+                    public void treeBackgroundChanged(@NotNull java.awt.Color newBackgroundColor) {
+                        splitPanel.setTreeBackgroundColor(newBackgroundColor);
+                    }
+
+                    @Override
+                    public void treeTextColorChanged(@NotNull java.awt.Color newTextColor) {
+                        splitPanel.setTreeTextColor(newTextColor);
+                    }
+
+                    @Override
+                    public void treeFontSizeChanged(int size) {
+                        splitPanel.setTreeFontSize(size);
+                    }
+
+                    @Override
+                    public void paneRatiosChanged(int leftPercent, int middlePercent, int rightPercent) {
+                        splitPanel.setPaneRatios(leftPercent, middlePercent, rightPercent);
+                    }
+
+                    @Override
+                    public void thirdPaneVisibilityChanged(boolean visible) {
+                        splitPanel.setThirdPaneVisible(visible);
                     }
                 });
 
-        toolWindow.setTitleActions(List.of(new ToggleNightModeAction(), new ToggleDisguiseAction(project, splitPanel)));
+        toolWindow.setTitleActions(List.of(
+                new ToggleNightModeAction(),
+                new ToggleThirdPaneAction(splitPanel),
+                new ToggleDisguiseAction(project, splitPanel)
+        ));
     }
 }

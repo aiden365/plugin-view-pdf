@@ -24,7 +24,7 @@ public final class ClosePdfViewAction extends AnAction implements DumbAware {
         controller.togglePdfView();
         if (controller.isPdfToggleEnabled()) {
             PdfViewerSettings settings = PdfViewerSettings.getInstance();
-            controller.getPdfPanel().reload(settings.getPdfPath(), settings.isNightModeEnabled());
+            controller.getPdfPanel().ensureLoaded(settings.getPdfPath(), settings.isNightModeEnabled());
         }
     }
 

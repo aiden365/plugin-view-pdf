@@ -13,8 +13,13 @@ import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JSpinner;
 import javax.swing.SpinnerNumberModel;
+import javax.swing.BorderFactory;
+import javax.swing.Box;
+import javax.swing.BoxLayout;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
+import java.awt.event.ComponentAdapter;
+import java.awt.event.ComponentEvent;
 
 public final class PdfViewerConfigurable implements Configurable {
     private JPanel panel;
@@ -25,8 +30,18 @@ public final class PdfViewerConfigurable implements Configurable {
     private JSpinner textRSpinner;
     private JSpinner textGSpinner;
     private JSpinner textBSpinner;
+    private JSpinner treeBgRSpinner;
+    private JSpinner treeBgGSpinner;
+    private JSpinner treeBgBSpinner;
+    private JSpinner treeTextRSpinner;
+    private JSpinner treeTextGSpinner;
+    private JSpinner treeTextBSpinner;
+    private JSpinner treeFontSizeSpinner;
     private JSpinner hoverSecondsSpinner;
     private JSpinner zoomPercentSpinner;
+    private JSpinner paneLeftSpinner;
+    private JSpinner paneMiddleSpinner;
+    private JSpinner paneRightSpinner;
 
     @Override
     public @Nls(capitalization = Nls.Capitalization.Title) String getDisplayName() {
@@ -37,7 +52,8 @@ public final class PdfViewerConfigurable implements Configurable {
     public @Nullable JComponent createComponent() {
         if (panel == null) {
             panel = new JPanel();
-            panel.setLayout(new javax.swing.BoxLayout(panel, javax.swing.BoxLayout.Y_AXIS));
+            panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
+            panel.setBorder(BorderFactory.createEmptyBorder(6, 8, 6, 8));
             pdfPathField = new TextFieldWithBrowseButton();
 
             FileChooserDescriptor descriptor = new FileChooserDescriptor(
@@ -58,11 +74,22 @@ public final class PdfViewerConfigurable implements Configurable {
             };
             descriptor.setTitle("选择 PDF 文件");
             pdfPathField.addBrowseFolderListener(new TextBrowseFolderListener(descriptor));
+            pdfPathField.setPreferredSize(new Dimension(520, pdfPathField.getPreferredSize().height));
             pdfPathField.setMaximumSize(new Dimension(Integer.MAX_VALUE, pdfPathField.getPreferredSize().height));
 
-            panel.add(pdfPathField);
+            JPanel pathPanel = createRowPanel();
+            pathPanel.add(new JLabel("PDF 文件"));
+            pathPanel.add(pdfPathField);
+            panel.add(pathPanel);
+            panel.add(Box.createVerticalStrut(4));
+            panel.addComponentListener(new ComponentAdapter() {
+                @Override
+                public void componentResized(ComponentEvent e) {
+                    updatePdfPathFieldWidth();
+                }
+            });
 
-            JPanel bgPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
+            JPanel bgPanel = createRowPanel();
             bgPanel.add(new JLabel("PDF 背景色 (RGB)"));
             bgRSpinner = new JSpinner(new SpinnerNumberModel(43, 0, 255, 1));
             bgGSpinner = new JSpinner(new SpinnerNumberModel(45, 0, 255, 1));
@@ -71,8 +98,9 @@ public final class PdfViewerConfigurable implements Configurable {
             bgPanel.add(bgGSpinner);
             bgPanel.add(bgBSpinner);
             panel.add(bgPanel);
+            panel.add(Box.createVerticalStrut(4));
 
-            JPanel textPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
+            JPanel textPanel = createRowPanel();
             textPanel.add(new JLabel("PDF 文字颜色 (RGB)"));
             textRSpinner = new JSpinner(new SpinnerNumberModel(220, 0, 255, 1));
             textGSpinner = new JSpinner(new SpinnerNumberModel(220, 0, 255, 1));
@@ -81,20 +109,73 @@ public final class PdfViewerConfigurable implements Configurable {
             textPanel.add(textGSpinner);
             textPanel.add(textBSpinner);
             panel.add(textPanel);
+            panel.add(Box.createVerticalStrut(4));
 
-            JPanel hoverPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
-            hoverPanel.add(new JLabel("代码区悬停自动显示 PDF（秒）"));
-            hoverSecondsSpinner = new JSpinner(new SpinnerNumberModel(10, 1, 3600, 1));
+            JPanel treeBgPanel = createRowPanel();
+            treeBgPanel.add(new JLabel("目录区背景色 (RGB)"));
+            treeBgRSpinner = new JSpinner(new SpinnerNumberModel(43, 0, 255, 1));
+            treeBgGSpinner = new JSpinner(new SpinnerNumberModel(45, 0, 255, 1));
+            treeBgBSpinner = new JSpinner(new SpinnerNumberModel(48, 0, 255, 1));
+            treeBgPanel.add(treeBgRSpinner);
+            treeBgPanel.add(treeBgGSpinner);
+            treeBgPanel.add(treeBgBSpinner);
+            panel.add(treeBgPanel);
+            panel.add(Box.createVerticalStrut(4));
+
+            JPanel treeTextPanel = createRowPanel();
+            treeTextPanel.add(new JLabel("目录区文字颜色 (RGB)"));
+            treeTextRSpinner = new JSpinner(new SpinnerNumberModel(220, 0, 255, 1));
+            treeTextGSpinner = new JSpinner(new SpinnerNumberModel(220, 0, 255, 1));
+            treeTextBSpinner = new JSpinner(new SpinnerNumberModel(220, 0, 255, 1));
+            treeTextPanel.add(treeTextRSpinner);
+            treeTextPanel.add(treeTextGSpinner);
+            treeTextPanel.add(treeTextBSpinner);
+            panel.add(treeTextPanel);
+            panel.add(Box.createVerticalStrut(4));
+
+            JPanel treeFontPanel = createRowPanel();
+            treeFontPanel.add(new JLabel("目录区字体大小"));
+            treeFontSizeSpinner = new JSpinner(new SpinnerNumberModel(12, 8, 32, 1));
+            treeFontPanel.add(treeFontSizeSpinner);
+            panel.add(treeFontPanel);
+            panel.add(Box.createVerticalStrut(4));
+
+            JPanel hoverPanel = createRowPanel();
+            hoverPanel.add(new JLabel("代码区悬停自动显示 PDF（秒，-1禁用，0立即）"));
+            hoverSecondsSpinner = new JSpinner(new SpinnerNumberModel(-1, -1, 3600, 1));
             hoverPanel.add(hoverSecondsSpinner);
             panel.add(hoverPanel);
+            panel.add(Box.createVerticalStrut(4));
 
-            JPanel zoomPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
+            JPanel zoomPanel = createRowPanel();
             zoomPanel.add(new JLabel("PDF 缩放（%）"));
             zoomPercentSpinner = new JSpinner(new SpinnerNumberModel(100, 10, 500, 5));
             zoomPanel.add(zoomPercentSpinner);
             panel.add(zoomPanel);
+            panel.add(Box.createVerticalStrut(4));
+
+            JPanel paneLeftPanel = createRowPanel();
+            paneLeftPanel.add(new JLabel("左侧宽度（%）"));
+            paneLeftSpinner = new JSpinner(new SpinnerNumberModel(25, 5, 90, 1));
+            paneLeftPanel.add(paneLeftSpinner);
+            panel.add(paneLeftPanel);
+            panel.add(Box.createVerticalStrut(4));
+
+            JPanel paneMiddlePanel = createRowPanel();
+            paneMiddlePanel.add(new JLabel("中间宽度（%）"));
+            paneMiddleSpinner = new JSpinner(new SpinnerNumberModel(45, 5, 90, 1));
+            paneMiddlePanel.add(paneMiddleSpinner);
+            panel.add(paneMiddlePanel);
+            panel.add(Box.createVerticalStrut(4));
+
+            JPanel paneRightPanel = createRowPanel();
+            paneRightPanel.add(new JLabel("右侧宽度（%）"));
+            paneRightSpinner = new JSpinner(new SpinnerNumberModel(30, 5, 90, 1));
+            paneRightPanel.add(paneRightSpinner);
+            panel.add(paneRightPanel);
         }
         reset();
+        updatePdfPathFieldWidth();
         return panel;
     }
 
@@ -120,6 +201,22 @@ public final class PdfViewerConfigurable implements Configurable {
         if (settings.getPdfTextR() != tr || settings.getPdfTextG() != tg || settings.getPdfTextB() != tb) {
             return true;
         }
+        int tbr = (int) treeBgRSpinner.getValue();
+        int tbg = (int) treeBgGSpinner.getValue();
+        int tbb = (int) treeBgBSpinner.getValue();
+        if (settings.getTreeBackgroundR() != tbr || settings.getTreeBackgroundG() != tbg || settings.getTreeBackgroundB() != tbb) {
+            return true;
+        }
+        int ttr = (int) treeTextRSpinner.getValue();
+        int ttg = (int) treeTextGSpinner.getValue();
+        int ttb = (int) treeTextBSpinner.getValue();
+        if (settings.getTreeTextR() != ttr || settings.getTreeTextG() != ttg || settings.getTreeTextB() != ttb) {
+            return true;
+        }
+        int treeFontSize = (int) treeFontSizeSpinner.getValue();
+        if (settings.getTreeFontSize() != treeFontSize) {
+            return true;
+        }
 
         int hoverSeconds = (int) hoverSecondsSpinner.getValue();
         if (settings.getAutoShowPdfHoverSeconds() != hoverSeconds) {
@@ -127,7 +224,16 @@ public final class PdfViewerConfigurable implements Configurable {
         }
 
         int zoomPercent = (int) zoomPercentSpinner.getValue();
-        return settings.getPdfZoomPercent() != zoomPercent;
+        if (settings.getPdfZoomPercent() != zoomPercent) {
+            return true;
+        }
+
+        int paneLeft = (int) paneLeftSpinner.getValue();
+        int paneMiddle = (int) paneMiddleSpinner.getValue();
+        int paneRight = (int) paneRightSpinner.getValue();
+        return settings.getPaneLeftPercent() != paneLeft
+                || settings.getPaneMiddlePercent() != paneMiddle
+                || settings.getPaneRightPercent() != paneRight;
     }
 
     @Override
@@ -136,8 +242,16 @@ public final class PdfViewerConfigurable implements Configurable {
         settings.setPdfPath(pdfPathField.getText());
         settings.setPdfBackgroundRgb((int) bgRSpinner.getValue(), (int) bgGSpinner.getValue(), (int) bgBSpinner.getValue());
         settings.setPdfTextRgb((int) textRSpinner.getValue(), (int) textGSpinner.getValue(), (int) textBSpinner.getValue());
+        settings.setTreeBackgroundRgb((int) treeBgRSpinner.getValue(), (int) treeBgGSpinner.getValue(), (int) treeBgBSpinner.getValue());
+        settings.setTreeTextRgb((int) treeTextRSpinner.getValue(), (int) treeTextGSpinner.getValue(), (int) treeTextBSpinner.getValue());
+        settings.setTreeFontSize((int) treeFontSizeSpinner.getValue());
         settings.setAutoShowPdfHoverSeconds((int) hoverSecondsSpinner.getValue());
         settings.setPdfZoomPercent((int) zoomPercentSpinner.getValue());
+        settings.setPaneRatios(
+                (int) paneLeftSpinner.getValue(),
+                (int) paneMiddleSpinner.getValue(),
+                (int) paneRightSpinner.getValue()
+        );
     }
 
     @Override
@@ -155,8 +269,18 @@ public final class PdfViewerConfigurable implements Configurable {
         textRSpinner.setValue(settings.getPdfTextR());
         textGSpinner.setValue(settings.getPdfTextG());
         textBSpinner.setValue(settings.getPdfTextB());
+        treeBgRSpinner.setValue(settings.getTreeBackgroundR());
+        treeBgGSpinner.setValue(settings.getTreeBackgroundG());
+        treeBgBSpinner.setValue(settings.getTreeBackgroundB());
+        treeTextRSpinner.setValue(settings.getTreeTextR());
+        treeTextGSpinner.setValue(settings.getTreeTextG());
+        treeTextBSpinner.setValue(settings.getTreeTextB());
+        treeFontSizeSpinner.setValue(settings.getTreeFontSize());
         hoverSecondsSpinner.setValue(settings.getAutoShowPdfHoverSeconds());
         zoomPercentSpinner.setValue(settings.getPdfZoomPercent());
+        paneLeftSpinner.setValue(settings.getPaneLeftPercent());
+        paneMiddleSpinner.setValue(settings.getPaneMiddlePercent());
+        paneRightSpinner.setValue(settings.getPaneRightPercent());
     }
 
     @Override
@@ -169,7 +293,39 @@ public final class PdfViewerConfigurable implements Configurable {
         textRSpinner = null;
         textGSpinner = null;
         textBSpinner = null;
+        treeBgRSpinner = null;
+        treeBgGSpinner = null;
+        treeBgBSpinner = null;
+        treeTextRSpinner = null;
+        treeTextGSpinner = null;
+        treeTextBSpinner = null;
+        treeFontSizeSpinner = null;
         hoverSecondsSpinner = null;
         zoomPercentSpinner = null;
+        paneLeftSpinner = null;
+        paneMiddleSpinner = null;
+        paneRightSpinner = null;
+    }
+
+    private static JPanel createRowPanel() {
+        JPanel row = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
+        row.setAlignmentX(JComponent.LEFT_ALIGNMENT);
+        return row;
+    }
+
+    private void updatePdfPathFieldWidth() {
+        if (panel == null || pdfPathField == null) {
+            return;
+        }
+        int totalWidth = panel.getWidth();
+        if (totalWidth <= 0) {
+            return;
+        }
+        int targetWidth = Math.max(360, (int) (totalWidth * 0.7));
+        int height = pdfPathField.getPreferredSize().height;
+        Dimension size = new Dimension(targetWidth, height);
+        pdfPathField.setPreferredSize(size);
+        pdfPathField.setMinimumSize(size);
+        pdfPathField.revalidate();
     }
 }

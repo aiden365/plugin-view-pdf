@@ -8,12 +8,10 @@ import com.intellij.openapi.project.Project;
 import org.jetbrains.annotations.NotNull;
 
 public final class ToggleDisguiseAction extends ToggleAction {
-    private final Project project;
     private final StealthSplitPanel splitPanel;
 
     public ToggleDisguiseAction(@NotNull Project project, @NotNull StealthSplitPanel splitPanel) {
         super("查看PDF");
-        this.project = project;
         this.splitPanel = splitPanel;
     }
 
@@ -28,8 +26,8 @@ public final class ToggleDisguiseAction extends ToggleAction {
         if (state) {
             PdfViewerSettings settings = PdfViewerSettings.getInstance();
             splitPanel.setPdfBackgroundColor(settings.getPdfBackgroundColor());
+            splitPanel.getPdfPanel().ensureLoaded(settings.getPdfPath(), settings.isNightModeEnabled());
             splitPanel.showPdf();
-            splitPanel.getPdfPanel().reload(settings.getPdfPath(), settings.isNightModeEnabled());
         } else {
             splitPanel.showDisguise();
         }
