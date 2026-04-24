@@ -19,6 +19,9 @@ import javax.swing.tree.ExpandVetoException;
 import javax.swing.tree.TreePath;
 import java.util.Arrays;
 import java.util.Comparator;
+import java.util.function.Consumer;
+import java.awt.Color;
+import java.awt.Component;
 
 public final class ProjectTreePanel implements Disposable {
     private static final Object PLACEHOLDER = new Object();
@@ -26,8 +29,11 @@ public final class ProjectTreePanel implements Disposable {
     private final Tree tree;
     private final DefaultTreeModel model;
     private final JBScrollPane component;
+    private final Consumer<VirtualFile> onFileClicked;
+    private Color backgroundColor;
 
-    public ProjectTreePanel(@NotNull Project project, @NotNull DisguisePanel disguisePanel) {
+    public ProjectTreePanel(@NotNull Project project, @NotNull DisguisePanel disguisePanel, @NotNull Consumer<VirtualFile> onFileClicked) {
+        this.onFileClicked = onFileClicked;
         VirtualFile rootDir = guessRootDir(project);
         DefaultMutableTreeNode rootNode = rootDir == null
                 ? new DefaultMutableTreeNode(" ")
@@ -37,13 +43,19 @@ public final class ProjectTreePanel implements Disposable {
         tree = new Tree(model);
         tree.setCellRenderer(new DefaultTreeCellRenderer() {
             @Override
-            public java.awt.Component getTreeCellRendererComponent(javax.swing.JTree tree, Object value, boolean sel, boolean expanded, boolean leaf, int row, boolean hasFocus) {
+            public Component getTreeCellRendererComponent(javax.swing.JTree tree, Object value, boolean sel, boolean expanded, boolean leaf, int row, boolean hasFocus) {
                 super.getTreeCellRendererComponent(tree, value, sel, expanded, leaf, row, hasFocus);
                 if (value instanceof DefaultMutableTreeNode node) {
                     Object userObject = node.getUserObject();
                     if (userObject instanceof VirtualFile vf) {
                         setText(vf.getName());
                     }
+                }
+                if (backgroundColor != null) {
+                    setBackgroundNonSelectionColor(backgroundColor);
+                    setTextNonSelectionColor(Color.WHITE);
+                    setBackgroundSelectionColor(backgroundColor.darker());
+                    setTextSelectionColor(Color.WHITE);
                 }
                 return this;
             }
@@ -72,6 +84,7 @@ public final class ProjectTreePanel implements Disposable {
             }
             Object userObject = node.getUserObject();
             if (userObject instanceof VirtualFile vf && !vf.isDirectory()) {
+                this.onFileClicked.accept(vf);
                 disguisePanel.setFile(vf);
             }
         });
@@ -81,6 +94,16 @@ public final class ProjectTreePanel implements Disposable {
 
     public @NotNull JComponent getComponent() {
         return component;
+    }
+
+    public void setBackgroundColor(@NotNull Color color) {
+        backgroundColor = color;
+        component.setOpaque(true);
+        component.getViewport().setOpaque(true);
+        component.getViewport().setBackground(color);
+        tree.setOpaque(true);
+        tree.setBackground(color);
+        tree.repaint();
     }
 
     private static @Nullable VirtualFile guessRootDir(@NotNull Project project) {

@@ -16,6 +16,7 @@ import javax.swing.JComponent;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import java.awt.BorderLayout;
+import java.awt.event.MouseAdapter;
 
 public final class DisguisePanel implements Disposable {
     private final Project project;
@@ -23,6 +24,7 @@ public final class DisguisePanel implements Disposable {
     private final JLabel placeholder;
 
     private Editor editor;
+    private MouseAdapter hoverListener;
 
     public DisguisePanel(@NotNull Project project) {
         this.project = project;
@@ -34,6 +36,28 @@ public final class DisguisePanel implements Disposable {
 
     public @NotNull JComponent getComponent() {
         return root;
+    }
+
+    public void setHoverListener(@NotNull MouseAdapter listener) {
+        if (hoverListener != null) {
+            root.removeMouseListener(hoverListener);
+            root.removeMouseMotionListener(hoverListener);
+            if (editor != null) {
+                editor.getComponent().removeMouseListener(hoverListener);
+                editor.getComponent().removeMouseMotionListener(hoverListener);
+                editor.getContentComponent().removeMouseListener(hoverListener);
+                editor.getContentComponent().removeMouseMotionListener(hoverListener);
+            }
+        }
+        hoverListener = listener;
+        root.addMouseListener(listener);
+        root.addMouseMotionListener(listener);
+        if (editor != null) {
+            editor.getComponent().addMouseListener(listener);
+            editor.getComponent().addMouseMotionListener(listener);
+            editor.getContentComponent().addMouseListener(listener);
+            editor.getContentComponent().addMouseMotionListener(listener);
+        }
     }
 
     public void setFile(@Nullable VirtualFile file) {
@@ -59,6 +83,12 @@ public final class DisguisePanel implements Disposable {
         editor = created;
         root.removeAll();
         root.add(created.getComponent(), BorderLayout.CENTER);
+        if (hoverListener != null) {
+            created.getComponent().addMouseListener(hoverListener);
+            created.getComponent().addMouseMotionListener(hoverListener);
+            created.getContentComponent().addMouseListener(hoverListener);
+            created.getContentComponent().addMouseMotionListener(hoverListener);
+        }
         root.revalidate();
         root.repaint();
     }
@@ -75,4 +105,3 @@ public final class DisguisePanel implements Disposable {
         releaseEditor();
     }
 }
-

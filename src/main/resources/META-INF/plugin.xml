@@ -28,11 +28,11 @@
 
         <applicationConfigurable
                 id="com.aiden.plugin.viewpdf.settings"
-                displayName="PDF Viewer"
+                displayName="XCode Viewer"
                 instance="com.aiden.plugin.viewpdf.settings.PdfViewerConfigurable"/>
 
         <toolWindow
-                id="PDF Viewer"
+                id="XCode Viewer"
                 anchor="bottom"
                 factoryClass="com.aiden.plugin.viewpdf.ui.PdfViewerToolWindowFactory"/>
 
@@ -43,7 +43,7 @@
                 id="com.aiden.plugin.viewpdf.actions.ScrollPdfUp"
                 class="com.aiden.plugin.viewpdf.actions.ScrollPdfUpAction"
                 text="Scroll PDF Up"
-                description="Scroll the PDF viewer up">
+                description="Scroll the XCode Viewer up">
             <keyboard-shortcut keymap="$default" first-keystroke="ctrl alt PAGE_UP"/>
             <add-to-group group-id="ToolsMenu" anchor="last"/>
         </action>
@@ -52,8 +52,17 @@
                 id="com.aiden.plugin.viewpdf.actions.ScrollPdfDown"
                 class="com.aiden.plugin.viewpdf.actions.ScrollPdfDownAction"
                 text="Scroll PDF Down"
-                description="Scroll the PDF viewer down">
+                description="Scroll the XCode Viewer down">
             <keyboard-shortcut keymap="$default" first-keystroke="ctrl alt PAGE_DOWN"/>
+            <add-to-group group-id="ToolsMenu" anchor="last"/>
+        </action>
+
+        <action
+                id="com.aiden.plugin.viewpdf.actions.ClosePdfView"
+                class="com.aiden.plugin.viewpdf.actions.ClosePdfViewAction"
+                text="Toggle PDF View"
+                description="Toggle between PDF view and code disguise">
+            <keyboard-shortcut keymap="$default" first-keystroke="ctrl alt END"/>
             <add-to-group group-id="ToolsMenu" anchor="last"/>
         </action>
     </actions>

@@ -18,7 +18,7 @@ public final class PdfViewerToolWindowFactory implements ToolWindowFactory, Dumb
     @Override
     public void createToolWindowContent(@NotNull Project project, @NotNull ToolWindow toolWindow) {
         StealthSplitPanel splitPanel = new StealthSplitPanel(project);
-        PdfViewerToolWindowController controller = new PdfViewerToolWindowController(splitPanel.getPdfPanel());
+        PdfViewerToolWindowController controller = new PdfViewerToolWindowController(splitPanel.getPdfPanel(), splitPanel);
         controller.setPdfVisible(false);
         project.putUserData(PdfViewerKeys.CONTROLLER_KEY, controller);
 
@@ -27,6 +27,17 @@ public final class PdfViewerToolWindowFactory implements ToolWindowFactory, Dumb
         toolWindow.getContentManager().addContent(content);
 
         PdfViewerSettings settings = PdfViewerSettings.getInstance();
+        splitPanel.setPdfBackgroundColor(settings.getPdfBackgroundColor());
+        splitPanel.setHoverSeconds(settings.getAutoShowPdfHoverSeconds());
+        splitPanel.getPdfPanel().setZoomPercent(settings.getPdfZoomPercent());
+        splitPanel.getPdfPanel().setTextColor(settings.getPdfTextColor());
+        splitPanel.setPdfToggleEnabled(false);
+        splitPanel.showDisguise();
+        splitPanel.setOnPdfShownCallback(() -> controller.setPdfVisible(true));
+        splitPanel.setOnDisguiseShownCallback(() -> controller.setPdfVisible(false));
+        splitPanel.setAutoShowPdfCallback(() ->
+                splitPanel.getPdfPanel().reload(settings.getPdfPath(), settings.isNightModeEnabled())
+        );
 
         ApplicationManager.getApplication()
                 .getMessageBus()
@@ -49,6 +60,27 @@ public final class PdfViewerToolWindowFactory implements ToolWindowFactory, Dumb
                     @Override
                     public void pdfBackgroundChanged(@NotNull java.awt.Color newBackgroundColor) {
                         splitPanel.setPdfBackgroundColor(newBackgroundColor);
+                    }
+
+                    @Override
+                    public void hoverSecondsChanged(int seconds) {
+                        splitPanel.setHoverSeconds(seconds);
+                    }
+
+                    @Override
+                    public void zoomPercentChanged(int percent) {
+                        splitPanel.getPdfPanel().setZoomPercent(percent);
+                        if (controller.isPdfVisible()) {
+                            controller.getPdfPanel().reload(settings.getPdfPath(), settings.isNightModeEnabled());
+                        }
+                    }
+
+                    @Override
+                    public void pdfTextColorChanged(@NotNull java.awt.Color newTextColor) {
+                        splitPanel.getPdfPanel().setTextColor(newTextColor);
+                        if (controller.isPdfVisible()) {
+                            controller.getPdfPanel().reload(settings.getPdfPath(), settings.isNightModeEnabled());
+                        }
                     }
                 });
 

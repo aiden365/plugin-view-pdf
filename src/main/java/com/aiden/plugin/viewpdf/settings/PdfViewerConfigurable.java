@@ -13,6 +13,7 @@ import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JSpinner;
 import javax.swing.SpinnerNumberModel;
+import java.awt.Dimension;
 import java.awt.FlowLayout;
 
 public final class PdfViewerConfigurable implements Configurable {
@@ -21,10 +22,15 @@ public final class PdfViewerConfigurable implements Configurable {
     private JSpinner bgRSpinner;
     private JSpinner bgGSpinner;
     private JSpinner bgBSpinner;
+    private JSpinner textRSpinner;
+    private JSpinner textGSpinner;
+    private JSpinner textBSpinner;
+    private JSpinner hoverSecondsSpinner;
+    private JSpinner zoomPercentSpinner;
 
     @Override
     public @Nls(capitalization = Nls.Capitalization.Title) String getDisplayName() {
-        return "PDF Viewer";
+        return "XCode Viewer";
     }
 
     @Override
@@ -52,6 +58,7 @@ public final class PdfViewerConfigurable implements Configurable {
             };
             descriptor.setTitle("选择 PDF 文件");
             pdfPathField.addBrowseFolderListener(new TextBrowseFolderListener(descriptor));
+            pdfPathField.setMaximumSize(new Dimension(Integer.MAX_VALUE, pdfPathField.getPreferredSize().height));
 
             panel.add(pdfPathField);
 
@@ -64,6 +71,28 @@ public final class PdfViewerConfigurable implements Configurable {
             bgPanel.add(bgGSpinner);
             bgPanel.add(bgBSpinner);
             panel.add(bgPanel);
+
+            JPanel textPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
+            textPanel.add(new JLabel("PDF 文字颜色 (RGB)"));
+            textRSpinner = new JSpinner(new SpinnerNumberModel(220, 0, 255, 1));
+            textGSpinner = new JSpinner(new SpinnerNumberModel(220, 0, 255, 1));
+            textBSpinner = new JSpinner(new SpinnerNumberModel(220, 0, 255, 1));
+            textPanel.add(textRSpinner);
+            textPanel.add(textGSpinner);
+            textPanel.add(textBSpinner);
+            panel.add(textPanel);
+
+            JPanel hoverPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
+            hoverPanel.add(new JLabel("代码区悬停自动显示 PDF（秒）"));
+            hoverSecondsSpinner = new JSpinner(new SpinnerNumberModel(10, 1, 3600, 1));
+            hoverPanel.add(hoverSecondsSpinner);
+            panel.add(hoverPanel);
+
+            JPanel zoomPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
+            zoomPanel.add(new JLabel("PDF 缩放（%）"));
+            zoomPercentSpinner = new JSpinner(new SpinnerNumberModel(100, 10, 500, 5));
+            zoomPanel.add(zoomPercentSpinner);
+            panel.add(zoomPanel);
         }
         reset();
         return panel;
@@ -82,7 +111,23 @@ public final class PdfViewerConfigurable implements Configurable {
         int r = (int) bgRSpinner.getValue();
         int g = (int) bgGSpinner.getValue();
         int b = (int) bgBSpinner.getValue();
-        return settings.getPdfBackgroundR() != r || settings.getPdfBackgroundG() != g || settings.getPdfBackgroundB() != b;
+        if (settings.getPdfBackgroundR() != r || settings.getPdfBackgroundG() != g || settings.getPdfBackgroundB() != b) {
+            return true;
+        }
+        int tr = (int) textRSpinner.getValue();
+        int tg = (int) textGSpinner.getValue();
+        int tb = (int) textBSpinner.getValue();
+        if (settings.getPdfTextR() != tr || settings.getPdfTextG() != tg || settings.getPdfTextB() != tb) {
+            return true;
+        }
+
+        int hoverSeconds = (int) hoverSecondsSpinner.getValue();
+        if (settings.getAutoShowPdfHoverSeconds() != hoverSeconds) {
+            return true;
+        }
+
+        int zoomPercent = (int) zoomPercentSpinner.getValue();
+        return settings.getPdfZoomPercent() != zoomPercent;
     }
 
     @Override
@@ -90,6 +135,9 @@ public final class PdfViewerConfigurable implements Configurable {
         PdfViewerSettings settings = PdfViewerSettings.getInstance();
         settings.setPdfPath(pdfPathField.getText());
         settings.setPdfBackgroundRgb((int) bgRSpinner.getValue(), (int) bgGSpinner.getValue(), (int) bgBSpinner.getValue());
+        settings.setPdfTextRgb((int) textRSpinner.getValue(), (int) textGSpinner.getValue(), (int) textBSpinner.getValue());
+        settings.setAutoShowPdfHoverSeconds((int) hoverSecondsSpinner.getValue());
+        settings.setPdfZoomPercent((int) zoomPercentSpinner.getValue());
     }
 
     @Override
@@ -104,6 +152,11 @@ public final class PdfViewerConfigurable implements Configurable {
         bgRSpinner.setValue(settings.getPdfBackgroundR());
         bgGSpinner.setValue(settings.getPdfBackgroundG());
         bgBSpinner.setValue(settings.getPdfBackgroundB());
+        textRSpinner.setValue(settings.getPdfTextR());
+        textGSpinner.setValue(settings.getPdfTextG());
+        textBSpinner.setValue(settings.getPdfTextB());
+        hoverSecondsSpinner.setValue(settings.getAutoShowPdfHoverSeconds());
+        zoomPercentSpinner.setValue(settings.getPdfZoomPercent());
     }
 
     @Override
@@ -113,5 +166,10 @@ public final class PdfViewerConfigurable implements Configurable {
         bgRSpinner = null;
         bgGSpinner = null;
         bgBSpinner = null;
+        textRSpinner = null;
+        textGSpinner = null;
+        textBSpinner = null;
+        hoverSecondsSpinner = null;
+        zoomPercentSpinner = null;
     }
 }

@@ -1,6 +1,5 @@
 package com.aiden.plugin.viewpdf.ui;
 
-import com.aiden.plugin.viewpdf.PdfViewerKeys;
 import com.aiden.plugin.viewpdf.settings.PdfViewerSettings;
 import com.intellij.openapi.actionSystem.ActionUpdateThread;
 import com.intellij.openapi.actionSystem.AnActionEvent;
@@ -20,24 +19,19 @@ public final class ToggleDisguiseAction extends ToggleAction {
 
     @Override
     public boolean isSelected(@NotNull AnActionEvent e) {
-        PdfViewerToolWindowController controller = project.getUserData(PdfViewerKeys.CONTROLLER_KEY);
-        return controller != null && controller.isPdfVisible();
+        return splitPanel.isPdfToggleEnabled();
     }
 
     @Override
     public void setSelected(@NotNull AnActionEvent e, boolean state) {
-        PdfViewerToolWindowController controller = project.getUserData(PdfViewerKeys.CONTROLLER_KEY);
-        if (controller == null) {
-            return;
-        }
-        controller.setPdfVisible(state);
+        splitPanel.setPdfToggleEnabled(state);
         if (state) {
             PdfViewerSettings settings = PdfViewerSettings.getInstance();
             splitPanel.setPdfBackgroundColor(settings.getPdfBackgroundColor());
-            splitPanel.showPdf(true);
-            controller.getPdfPanel().reload(settings.getPdfPath(), settings.isNightModeEnabled());
+            splitPanel.showPdf();
+            splitPanel.getPdfPanel().reload(settings.getPdfPath(), settings.isNightModeEnabled());
         } else {
-            splitPanel.showPdf(false);
+            splitPanel.showDisguise();
         }
     }
 

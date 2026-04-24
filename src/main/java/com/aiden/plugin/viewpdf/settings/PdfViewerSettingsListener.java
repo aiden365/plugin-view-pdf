@@ -15,4 +15,10 @@ public interface PdfViewerSettingsListener {
     void nightModeChanged(boolean enabled);
 
     void pdfBackgroundChanged(@NotNull Color newBackgroundColor);
+
+    void hoverSecondsChanged(int seconds);
+
+    void zoomPercentChanged(int percent);
+
+    void pdfTextColorChanged(@NotNull Color newTextColor);
 }

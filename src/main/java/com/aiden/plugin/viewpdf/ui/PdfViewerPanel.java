@@ -18,8 +18,10 @@ import javax.swing.JScrollPane;
 import javax.swing.SwingWorker;
 import java.awt.BorderLayout;
 import java.awt.Color;
+import java.awt.Component;
 import java.awt.Dimension;
 import java.awt.Graphics2D;
+import java.awt.event.MouseAdapter;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.util.List;
@@ -27,6 +29,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 public final class PdfViewerPanel implements Disposable {
     private static final float DPI = 144f;
+    private static final Color DEFAULT_BACKGROUND = new Color(43, 45, 48);
 
     private final JPanel root;
     private final JBScrollPane scrollPane;
@@ -34,6 +37,9 @@ public final class PdfViewerPanel implements Disposable {
     private final JLabel messageLabel;
 
     private Color backgroundColor;
+    private Color textColor = new Color(220, 220, 220);
+    private MouseAdapter regionMouseListener;
+    private int zoomPercent = 100;
 
     private final AtomicInteger loadSeq = new AtomicInteger(0);
     private SwingWorker<Void, PageUpdate> worker;
@@ -64,12 +70,28 @@ public final class PdfViewerPanel implements Disposable {
         ApplicationManager.getApplication().invokeLater(this::applyBackgroundColor);
     }
 
+    public void setRegionMouseListener(@NotNull MouseAdapter listener) {
+        if (regionMouseListener != null) {
+            removeMouseListenerRecursively(root, regionMouseListener);
+        }
+        regionMouseListener = listener;
+        addMouseListenerRecursively(root, listener);
+    }
+
+    public void setZoomPercent(int percent) {
+        zoomPercent = Math.max(10, Math.min(500, percent));
+    }
+
+    public void setTextColor(@Nullable Color color) {
+        textColor = color == null ? new Color(220, 220, 220) : color;
+    }
+
     public void reload(@Nullable String pdfPath, boolean nightModeEnabled) {
         int seq = loadSeq.incrementAndGet();
         cancelWorker();
 
         if (pdfPath == null) {
-            showMessage("未选择 PDF，请在 Settings: PDF Viewer 中选择。");
+            showMessage("未选择 PDF，请在 Settings: XCode Viewer 中选择。");
             return;
         }
 
@@ -92,9 +114,14 @@ public final class PdfViewerPanel implements Disposable {
                         if (isCancelled() || loadSeq.get() != seq) {
                             return null;
                         }
-                        BufferedImage image = renderer.renderImageWithDPI(i, DPI, ImageType.RGB);
+                        float effectiveDpi = DPI * zoomPercent / 100.0f;
+                        BufferedImage image = renderer.renderImageWithDPI(i, effectiveDpi, ImageType.RGB);
                         if (nightModeEnabled) {
-                            image = toGrayInvert(image);
+                            image = toToneMap(
+                                    image,
+                                    backgroundColor == null ? DEFAULT_BACKGROUND : backgroundColor,
+                                    textColor
+                            );
                         }
                         publish(new PageUpdate(i, image));
                     }
@@ -208,21 +235,56 @@ public final class PdfViewerPanel implements Disposable {
         JLabel label = new JLabel(new ImageIcon(image));
         label.setAlignmentX(JComponent.CENTER_ALIGNMENT);
         label.setOpaque(true);
-        label.setBackground(Color.DARK_GRAY);
+        label.setBackground(backgroundColor == null ? Color.DARK_GRAY : backgroundColor);
         label.setBorder(javax.swing.BorderFactory.createEmptyBorder(8, 8, 8, 8));
+        if (regionMouseListener != null) {
+            label.addMouseListener(regionMouseListener);
+            label.addMouseMotionListener(regionMouseListener);
+        }
 
         pagesPanel.add(label);
         JPanel spacer = new JPanel();
         spacer.setOpaque(false);
         spacer.setPreferredSize(new Dimension(1, 12));
+        if (regionMouseListener != null) {
+            spacer.addMouseListener(regionMouseListener);
+            spacer.addMouseMotionListener(regionMouseListener);
+        }
         pagesPanel.add(spacer);
     }
 
-    private static BufferedImage toGrayInvert(BufferedImage input) {
+    private static void addMouseListenerRecursively(@NotNull Component component, @NotNull MouseAdapter listener) {
+        component.addMouseListener(listener);
+        component.addMouseMotionListener(listener);
+        if (component instanceof java.awt.Container container) {
+            for (Component child : container.getComponents()) {
+                addMouseListenerRecursively(child, listener);
+            }
+        }
+    }
+
+    private static void removeMouseListenerRecursively(@NotNull Component component, @NotNull MouseAdapter listener) {
+        component.removeMouseListener(listener);
+        component.removeMouseMotionListener(listener);
+        if (component instanceof java.awt.Container container) {
+            for (Component child : container.getComponents()) {
+                removeMouseListenerRecursively(child, listener);
+            }
+        }
+    }
+
+    private static BufferedImage toToneMap(BufferedImage input, @NotNull Color targetBackground, @NotNull Color targetText) {
         BufferedImage gray = new BufferedImage(input.getWidth(), input.getHeight(), BufferedImage.TYPE_INT_RGB);
         Graphics2D g = gray.createGraphics();
         g.drawImage(input, 0, 0, null);
         g.dispose();
+
+        int br = targetBackground.getRed();
+        int bg = targetBackground.getGreen();
+        int bb = targetBackground.getBlue();
+        int tr = targetText.getRed();
+        int tg = targetText.getGreen();
+        int tb = targetText.getBlue();
 
         int w = gray.getWidth();
         int h = gray.getHeight();
@@ -233,8 +295,11 @@ public final class PdfViewerPanel implements Disposable {
                 int gr = (rgb >> 8) & 0xFF;
                 int b = rgb & 0xFF;
                 int lum = (r * 30 + gr * 59 + b * 11) / 100;
-                int inv = 255 - lum;
-                int out = (inv << 16) | (inv << 8) | inv;
+                int inv = 255 - lum; // Darker source pixels should move closer to target text color.
+                int outR = br + (inv * (tr - br)) / 255;
+                int outG = bg + (inv * (tg - bg)) / 255;
+                int outB = bb + (inv * (tb - bb)) / 255;
+                int out = (outR << 16) | (outG << 8) | outB;
                 gray.setRGB(x, y, out);
             }
         }
