@@ -42,6 +42,7 @@ public final class PdfViewerToolWindowFactory implements ToolWindowFactory, Dumb
         splitPanel.setHoverSeconds(settings.getAutoShowPdfHoverSeconds());
         splitPanel.getPdfPanel().setZoomPercent(settings.getPdfZoomPercent());
         splitPanel.getPdfPanel().setTextColor(settings.getPdfTextColor());
+        splitPanel.getPdfPanel().setRenderBatchPageCount(settings.getRenderBatchPageCount());
         splitPanel.getPdfPanel().setReadingPositionHandlers(settings::getPdfReadPosition, settings::setPdfReadPosition);
         splitPanel.setPdfToggleEnabled(false);
         splitPanel.showDisguise();
@@ -115,10 +116,18 @@ public final class PdfViewerToolWindowFactory implements ToolWindowFactory, Dumb
                     public void thirdPaneVisibilityChanged(boolean visible) {
                         splitPanel.setThirdPaneVisible(visible);
                     }
+
+                    @Override
+                    public void editorPopupSizeChanged(int width, int height) {
+                    }
+
+                    @Override
+                    public void renderBatchPageCountChanged(int pageCount) {
+                        splitPanel.getPdfPanel().setRenderBatchPageCount(pageCount);
+                    }
                 });
 
         toolWindow.setTitleActions(List.of(
-                new ToggleNightModeAction(),
                 new ToggleThirdPaneAction(splitPanel),
                 new ToggleDisguiseAction(project, splitPanel)
         ));

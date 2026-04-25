@@ -35,6 +35,9 @@ public final class PdfViewerSettings implements PersistentStateComponent<PdfView
     private static final int DEFAULT_PANE_LEFT_PERCENT = 25;
     private static final int DEFAULT_PANE_MIDDLE_PERCENT = 45;
     private static final int DEFAULT_PANE_RIGHT_PERCENT = 30;
+    private static final int DEFAULT_RENDER_BATCH_PAGE_COUNT = 50;
+    private static final int DEFAULT_EDITOR_POPUP_WIDTH = 760;
+    private static final int DEFAULT_EDITOR_POPUP_HEIGHT = 520;
 
     public static final class StateData {
         public String pdfPath;
@@ -58,7 +61,10 @@ public final class PdfViewerSettings implements PersistentStateComponent<PdfView
         public Integer paneLeftPercent;
         public Integer paneMiddlePercent;
         public Integer paneRightPercent;
+        public Integer renderBatchPageCount;
         public Boolean thirdPaneVisible;
+        public Integer editorPopupWidth;
+        public Integer editorPopupHeight;
     }
 
     private StateData state = new StateData();
@@ -351,6 +357,56 @@ public final class PdfViewerSettings implements PersistentStateComponent<PdfView
                 .thirdPaneVisibilityChanged(visible);
     }
 
+    public int getRenderBatchPageCount() {
+        Integer value = state.renderBatchPageCount;
+        if (value == null) {
+            return DEFAULT_RENDER_BATCH_PAGE_COUNT;
+        }
+        return Math.max(1, value);
+    }
+
+    public void setRenderBatchPageCount(int pageCount) {
+        int normalized = Math.max(1, pageCount);
+        if (getRenderBatchPageCount() == normalized) {
+            return;
+        }
+        state.renderBatchPageCount = normalized;
+        ApplicationManager.getApplication()
+                .getMessageBus()
+                .syncPublisher(PdfViewerSettingsListener.TOPIC)
+                .renderBatchPageCountChanged(normalized);
+    }
+
+    public int getEditorPopupWidth() {
+        Integer value = state.editorPopupWidth;
+        if (value == null) {
+            return DEFAULT_EDITOR_POPUP_WIDTH;
+        }
+        return clampPopupSize(value);
+    }
+
+    public int getEditorPopupHeight() {
+        Integer value = state.editorPopupHeight;
+        if (value == null) {
+            return DEFAULT_EDITOR_POPUP_HEIGHT;
+        }
+        return clampPopupSize(value);
+    }
+
+    public void setEditorPopupSize(int width, int height) {
+        int normalizedWidth = clampPopupSize(width);
+        int normalizedHeight = clampPopupSize(height);
+        if (getEditorPopupWidth() == normalizedWidth && getEditorPopupHeight() == normalizedHeight) {
+            return;
+        }
+        state.editorPopupWidth = normalizedWidth;
+        state.editorPopupHeight = normalizedHeight;
+        ApplicationManager.getApplication()
+                .getMessageBus()
+                .syncPublisher(PdfViewerSettingsListener.TOPIC)
+                .editorPopupSizeChanged(normalizedWidth, normalizedHeight);
+    }
+
     public int getPdfReadPosition(@Nullable String pdfPath) {
         String key = normalizePdfPathKey(pdfPath);
         if (key == null) {
@@ -389,6 +445,10 @@ public final class PdfViewerSettings implements PersistentStateComponent<PdfView
 
     private static int clampPanePercent(int value) {
         return Math.max(5, Math.min(90, value));
+    }
+
+    private static int clampPopupSize(int value) {
+        return Math.max(300, Math.min(2000, value));
     }
 
     private static int[] normalizePaneRatios(int leftPercent, int middlePercent, int rightPercent) {

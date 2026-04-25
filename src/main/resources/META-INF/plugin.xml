@@ -65,5 +65,13 @@
             <keyboard-shortcut keymap="$default" first-keystroke="ctrl alt END"/>
             <add-to-group group-id="ToolsMenu" anchor="last"/>
         </action>
+
+        <action
+                id="com.aiden.plugin.viewpdf.actions.ShowEditorPdfPopup"
+                class="com.aiden.plugin.viewpdf.actions.ShowEditorPdfPopupAction"
+                text="Show Editor PDF Popup"
+                description="Show a floating PDF popup in editor">
+            <add-to-group group-id="ToolsMenu" anchor="last"/>
+        </action>
     </actions>
 </idea-plugin>

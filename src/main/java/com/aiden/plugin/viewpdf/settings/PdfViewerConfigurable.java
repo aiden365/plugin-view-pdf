@@ -9,6 +9,7 @@ import org.jetbrains.annotations.Nls;
 import org.jetbrains.annotations.Nullable;
 
 import javax.swing.JComponent;
+import javax.swing.JCheckBox;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JSpinner;
@@ -37,11 +38,15 @@ public final class PdfViewerConfigurable implements Configurable {
     private JSpinner treeTextGSpinner;
     private JSpinner treeTextBSpinner;
     private JSpinner treeFontSizeSpinner;
+    private JCheckBox nightModeCheckBox;
     private JSpinner hoverSecondsSpinner;
     private JSpinner zoomPercentSpinner;
     private JSpinner paneLeftSpinner;
     private JSpinner paneMiddleSpinner;
     private JSpinner paneRightSpinner;
+    private JSpinner renderBatchPageCountSpinner;
+    private JSpinner editorPopupWidthSpinner;
+    private JSpinner editorPopupHeightSpinner;
 
     @Override
     public @Nls(capitalization = Nls.Capitalization.Title) String getDisplayName() {
@@ -140,6 +145,13 @@ public final class PdfViewerConfigurable implements Configurable {
             panel.add(treeFontPanel);
             panel.add(Box.createVerticalStrut(4));
 
+            JPanel nightModePanel = createRowPanel();
+            nightModePanel.add(new JLabel("启用夜间模式"));
+            nightModeCheckBox = new JCheckBox();
+            nightModePanel.add(nightModeCheckBox);
+            panel.add(nightModePanel);
+            panel.add(Box.createVerticalStrut(4));
+
             JPanel hoverPanel = createRowPanel();
             hoverPanel.add(new JLabel("代码区悬停自动显示 PDF（秒，-1禁用，0立即）"));
             hoverSecondsSpinner = new JSpinner(new SpinnerNumberModel(-1, -1, 3600, 1));
@@ -173,6 +185,27 @@ public final class PdfViewerConfigurable implements Configurable {
             paneRightSpinner = new JSpinner(new SpinnerNumberModel(30, 5, 90, 1));
             paneRightPanel.add(paneRightSpinner);
             panel.add(paneRightPanel);
+            panel.add(Box.createVerticalStrut(4));
+
+            JPanel batchPageCountPanel = createRowPanel();
+            batchPageCountPanel.add(new JLabel("每批渲染页数"));
+            renderBatchPageCountSpinner = new JSpinner(new SpinnerNumberModel(50, 1, 5000, 1));
+            batchPageCountPanel.add(renderBatchPageCountSpinner);
+            panel.add(batchPageCountPanel);
+            panel.add(Box.createVerticalStrut(4));
+
+            JPanel popupWidthPanel = createRowPanel();
+            popupWidthPanel.add(new JLabel("悬浮窗默认宽度（px）"));
+            editorPopupWidthSpinner = new JSpinner(new SpinnerNumberModel(760, 300, 2000, 10));
+            popupWidthPanel.add(editorPopupWidthSpinner);
+            panel.add(popupWidthPanel);
+            panel.add(Box.createVerticalStrut(4));
+
+            JPanel popupHeightPanel = createRowPanel();
+            popupHeightPanel.add(new JLabel("悬浮窗默认高度（px）"));
+            editorPopupHeightSpinner = new JSpinner(new SpinnerNumberModel(520, 300, 2000, 10));
+            popupHeightPanel.add(editorPopupHeightSpinner);
+            panel.add(popupHeightPanel);
         }
         reset();
         updatePdfPathFieldWidth();
@@ -217,11 +250,15 @@ public final class PdfViewerConfigurable implements Configurable {
         if (settings.getTreeFontSize() != treeFontSize) {
             return true;
         }
+        if (settings.isNightModeEnabled() != nightModeCheckBox.isSelected()) {
+            return true;
+        }
 
         int hoverSeconds = (int) hoverSecondsSpinner.getValue();
         if (settings.getAutoShowPdfHoverSeconds() != hoverSeconds) {
             return true;
         }
+
 
         int zoomPercent = (int) zoomPercentSpinner.getValue();
         if (settings.getPdfZoomPercent() != zoomPercent) {
@@ -231,9 +268,19 @@ public final class PdfViewerConfigurable implements Configurable {
         int paneLeft = (int) paneLeftSpinner.getValue();
         int paneMiddle = (int) paneMiddleSpinner.getValue();
         int paneRight = (int) paneRightSpinner.getValue();
-        return settings.getPaneLeftPercent() != paneLeft
+        if (settings.getPaneLeftPercent() != paneLeft
                 || settings.getPaneMiddlePercent() != paneMiddle
-                || settings.getPaneRightPercent() != paneRight;
+                || settings.getPaneRightPercent() != paneRight) {
+            return true;
+        }
+        int renderBatchPageCount = (int) renderBatchPageCountSpinner.getValue();
+        if (settings.getRenderBatchPageCount() != renderBatchPageCount) {
+            return true;
+        }
+        int popupWidth = (int) editorPopupWidthSpinner.getValue();
+        int popupHeight = (int) editorPopupHeightSpinner.getValue();
+        return settings.getEditorPopupWidth() != popupWidth
+                || settings.getEditorPopupHeight() != popupHeight;
     }
 
     @Override
@@ -245,12 +292,18 @@ public final class PdfViewerConfigurable implements Configurable {
         settings.setTreeBackgroundRgb((int) treeBgRSpinner.getValue(), (int) treeBgGSpinner.getValue(), (int) treeBgBSpinner.getValue());
         settings.setTreeTextRgb((int) treeTextRSpinner.getValue(), (int) treeTextGSpinner.getValue(), (int) treeTextBSpinner.getValue());
         settings.setTreeFontSize((int) treeFontSizeSpinner.getValue());
+        settings.setNightModeEnabled(nightModeCheckBox.isSelected());
         settings.setAutoShowPdfHoverSeconds((int) hoverSecondsSpinner.getValue());
         settings.setPdfZoomPercent((int) zoomPercentSpinner.getValue());
         settings.setPaneRatios(
                 (int) paneLeftSpinner.getValue(),
                 (int) paneMiddleSpinner.getValue(),
                 (int) paneRightSpinner.getValue()
+        );
+        settings.setRenderBatchPageCount((int) renderBatchPageCountSpinner.getValue());
+        settings.setEditorPopupSize(
+                (int) editorPopupWidthSpinner.getValue(),
+                (int) editorPopupHeightSpinner.getValue()
         );
     }
 
@@ -276,11 +329,15 @@ public final class PdfViewerConfigurable implements Configurable {
         treeTextGSpinner.setValue(settings.getTreeTextG());
         treeTextBSpinner.setValue(settings.getTreeTextB());
         treeFontSizeSpinner.setValue(settings.getTreeFontSize());
+        nightModeCheckBox.setSelected(settings.isNightModeEnabled());
         hoverSecondsSpinner.setValue(settings.getAutoShowPdfHoverSeconds());
         zoomPercentSpinner.setValue(settings.getPdfZoomPercent());
         paneLeftSpinner.setValue(settings.getPaneLeftPercent());
         paneMiddleSpinner.setValue(settings.getPaneMiddlePercent());
         paneRightSpinner.setValue(settings.getPaneRightPercent());
+        renderBatchPageCountSpinner.setValue(settings.getRenderBatchPageCount());
+        editorPopupWidthSpinner.setValue(settings.getEditorPopupWidth());
+        editorPopupHeightSpinner.setValue(settings.getEditorPopupHeight());
     }
 
     @Override
@@ -300,11 +357,15 @@ public final class PdfViewerConfigurable implements Configurable {
         treeTextGSpinner = null;
         treeTextBSpinner = null;
         treeFontSizeSpinner = null;
+        nightModeCheckBox = null;
         hoverSecondsSpinner = null;
         zoomPercentSpinner = null;
         paneLeftSpinner = null;
         paneMiddleSpinner = null;
         paneRightSpinner = null;
+        renderBatchPageCountSpinner = null;
+        editorPopupWidthSpinner = null;
+        editorPopupHeightSpinner = null;
     }
 
     private static JPanel createRowPanel() {

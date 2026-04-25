@@ -31,4 +31,8 @@ public interface PdfViewerSettingsListener {
     void paneRatiosChanged(int leftPercent, int middlePercent, int rightPercent);
 
     void thirdPaneVisibilityChanged(boolean visible);
+
+    void editorPopupSizeChanged(int width, int height);
+
+    void renderBatchPageCountChanged(int pageCount);
 }
