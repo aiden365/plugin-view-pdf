@@ -15,6 +15,7 @@ import javax.swing.JComponent;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
+import javax.swing.JScrollBar;
 import javax.swing.SwingWorker;
 import javax.swing.Timer;
 import java.awt.BorderLayout;
@@ -25,6 +26,7 @@ import java.awt.Graphics2D;
 import java.awt.event.MouseAdapter;
 import java.awt.image.BufferedImage;
 import java.io.File;
+import java.util.ArrayList;
 import java.util.Objects;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
@@ -36,11 +38,13 @@ public final class PdfViewerPanel implements Disposable {
     private static final Color DEFAULT_BACKGROUND = new Color(43, 45, 48);
     private static final int DEFAULT_PAGES_PER_BATCH = 50;
     private static final int NEXT_BATCH_THRESHOLD_PX = 400;
+    private static final int SCROLLBAR_HIDE_DELAY_MS = 900;
 
     private final JPanel root;
     private final JBScrollPane scrollPane;
     private final JPanel pagesPanel;
     private final JLabel messageLabel;
+    private final Timer scrollbarHideTimer;
 
     private Color backgroundColor;
     private Color textColor = new Color(220, 220, 220);
@@ -65,7 +69,7 @@ public final class PdfViewerPanel implements Disposable {
     private int pagesPerBatch = DEFAULT_PAGES_PER_BATCH;
 
     private final AtomicInteger loadSeq = new AtomicInteger(0);
-    private SwingWorker<BatchRenderResult, PageUpdate> worker;
+    private SwingWorker<BatchRenderResult, Void> worker;
 
     public PdfViewerPanel() {
         root = new JPanel(new BorderLayout());
@@ -78,7 +82,13 @@ public final class PdfViewerPanel implements Disposable {
         pagesPanel.setLayout(new javax.swing.BoxLayout(pagesPanel, javax.swing.BoxLayout.Y_AXIS));
         scrollPane = new JBScrollPane(pagesPanel);
         scrollPane.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
+        scrollbarHideTimer = new Timer(SCROLLBAR_HIDE_DELAY_MS, e -> hideVerticalScrollBarNow());
+        scrollbarHideTimer.setRepeats(false);
+        hideVerticalScrollBarNow();
         scrollPane.getVerticalScrollBar().addAdjustmentListener(e -> {
+            if (!suppressAutoSave) {
+                showVerticalScrollBarTemporarily();
+            }
             saveCurrentReadingPosition();
             maybeRequestNextBatch();
         });
@@ -151,7 +161,7 @@ public final class PdfViewerPanel implements Disposable {
         loadingBatch = false;
 
         if (pdfPath == null) {
-            showMessage("未选择 PDF，请在 Settings: XCode Viewer 中选择。");
+            showMessage("未选择 PDF，请在 Settings: XCode Tools 中选择。");
             suppressAutoSave = false;
             return;
         }
@@ -177,12 +187,13 @@ public final class PdfViewerPanel implements Disposable {
                     int pageCount = document.getNumberOfPages();
                     int endPage = Math.min(pageCount, startPage + pagesPerBatch);
                     if (startPage >= endPage) {
-                        return new BatchRenderResult(pageCount, startPage, firstBatch);
+                        return new BatchRenderResult(pageCount, startPage, firstBatch, List.of());
                     }
+                    List<BufferedImage> batchImages = new ArrayList<>(Math.max(0, endPage - startPage));
 
                     for (int i = startPage; i < endPage; i++) {
                         if (isCancelled() || loadSeq.get() != seq) {
-                            return new BatchRenderResult(pageCount, startPage, firstBatch);
+                            break;
                         }
                         float effectiveDpi = DPI * zoomPercent / 100.0f;
                         BufferedImage image = renderer.renderImageWithDPI(i, effectiveDpi, ImageType.RGB);
@@ -193,23 +204,11 @@ public final class PdfViewerPanel implements Disposable {
                                     textColor
                             );
                         }
-                        publish(new PageUpdate(i, image));
+                        batchImages.add(image);
                     }
-                    return new BatchRenderResult(pageCount, endPage, firstBatch);
+                    int renderedUntil = startPage + batchImages.size();
+                    return new BatchRenderResult(pageCount, renderedUntil, firstBatch, batchImages);
                 }
-            }
-
-            @Override
-            protected void process(List<PageUpdate> chunks) {
-                if (loadSeq.get() != seq) {
-                    return;
-                }
-                ensureViewerShown();
-                for (PageUpdate update : chunks) {
-                    addPage(update.image);
-                }
-                pagesPanel.revalidate();
-                pagesPanel.repaint();
             }
 
             @Override
@@ -221,6 +220,14 @@ public final class PdfViewerPanel implements Disposable {
                 }
                 try {
                     BatchRenderResult result = get();
+                    if (!result.images().isEmpty()) {
+                        ensureViewerShown();
+                        for (BufferedImage image : result.images()) {
+                            addPage(image);
+                        }
+                        pagesPanel.revalidate();
+                        pagesPanel.repaint();
+                    }
                     totalPageCount = result.totalPageCount();
                     renderedPageCount = Math.max(renderedPageCount, result.renderedUntilPageExclusive());
                     if (pagesPanel.getComponentCount() == 0 && result.firstBatch()) {
@@ -253,6 +260,7 @@ public final class PdfViewerPanel implements Disposable {
 
     public void scrollByViewport(boolean down) {
         JScrollPane sp = scrollPane;
+        showVerticalScrollBarTemporarily();
         int extent = sp.getViewport().getExtentSize().height;
         int delta = Math.max(1, (int) (extent * 0.9));
         int direction = down ? 1 : -1;
@@ -316,7 +324,7 @@ public final class PdfViewerPanel implements Disposable {
     }
 
     private void cancelWorker() {
-        SwingWorker<BatchRenderResult, PageUpdate> w = worker;
+        SwingWorker<BatchRenderResult, Void> w = worker;
         if (w != null) {
             w.cancel(true);
             worker = null;
@@ -396,6 +404,7 @@ public final class PdfViewerPanel implements Disposable {
 
     private void showLoading() {
         ApplicationManager.getApplication().invokeLater(() -> {
+            hideVerticalScrollBarNow();
             pagesPanel.removeAll();
             root.removeAll();
             messageLabel.setText("正在加载 PDF...");
@@ -410,11 +419,25 @@ public final class PdfViewerPanel implements Disposable {
         if (root.getComponentCount() == 1 && root.getComponent(0) == scrollPane) {
             return;
         }
+        hideVerticalScrollBarNow();
         root.removeAll();
         applyBackgroundColor();
         root.add(scrollPane, BorderLayout.CENTER);
         root.revalidate();
         root.repaint();
+    }
+
+    private void showVerticalScrollBarTemporarily() {
+        JScrollBar bar = scrollPane.getVerticalScrollBar();
+        if (!bar.isVisible()) {
+            bar.setVisible(true);
+        }
+        scrollbarHideTimer.restart();
+    }
+
+    private void hideVerticalScrollBarNow() {
+        scrollbarHideTimer.stop();
+        scrollPane.getVerticalScrollBar().setVisible(false);
     }
 
     private void applyBackgroundColor() {
@@ -514,11 +537,14 @@ public final class PdfViewerPanel implements Disposable {
         saveCurrentReadingPosition();
         cancelRestoreTimer();
         cancelWorker();
+        scrollbarHideTimer.stop();
     }
 
-    private record PageUpdate(int pageIndex, BufferedImage image) {
-    }
-
-    private record BatchRenderResult(int totalPageCount, int renderedUntilPageExclusive, boolean firstBatch) {
+    private record BatchRenderResult(
+            int totalPageCount,
+            int renderedUntilPageExclusive,
+            boolean firstBatch,
+            @NotNull List<BufferedImage> images
+    ) {
     }
 }

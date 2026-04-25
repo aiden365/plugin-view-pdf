@@ -30,7 +30,7 @@ public final class PdfViewerSettings implements PersistentStateComponent<PdfView
     private static final int DEFAULT_TREE_TEXT_G = 220;
     private static final int DEFAULT_TREE_TEXT_B = 220;
     private static final int DEFAULT_TREE_FONT_SIZE = 12;
-    private static final int DEFAULT_HOVER_SECONDS = 10;
+    private static final int DEFAULT_HOVER_SECONDS = -1;
     private static final int DEFAULT_ZOOM_PERCENT = 100;
     private static final int DEFAULT_PANE_LEFT_PERCENT = 25;
     private static final int DEFAULT_PANE_MIDDLE_PERCENT = 45;
@@ -65,6 +65,7 @@ public final class PdfViewerSettings implements PersistentStateComponent<PdfView
         public Boolean thirdPaneVisible;
         public Integer editorPopupWidth;
         public Integer editorPopupHeight;
+        public Boolean editorPopupBorderVisible;
     }
 
     private StateData state = new StateData();
@@ -407,6 +408,21 @@ public final class PdfViewerSettings implements PersistentStateComponent<PdfView
                 .editorPopupSizeChanged(normalizedWidth, normalizedHeight);
     }
 
+    public boolean isEditorPopupBorderVisible() {
+        return state.editorPopupBorderVisible == null || state.editorPopupBorderVisible;
+    }
+
+    public void setEditorPopupBorderVisible(boolean visible) {
+        if (isEditorPopupBorderVisible() == visible) {
+            return;
+        }
+        state.editorPopupBorderVisible = visible;
+        ApplicationManager.getApplication()
+                .getMessageBus()
+                .syncPublisher(PdfViewerSettingsListener.TOPIC)
+                .editorPopupBorderVisibilityChanged(visible);
+    }
+
     public int getPdfReadPosition(@Nullable String pdfPath) {
         String key = normalizePdfPathKey(pdfPath);
         if (key == null) {
@@ -448,7 +464,7 @@ public final class PdfViewerSettings implements PersistentStateComponent<PdfView
     }
 
     private static int clampPopupSize(int value) {
-        return Math.max(300, Math.min(2000, value));
+        return Math.max(1, Math.min(2000, value));
     }
 
     private static int[] normalizePaneRatios(int leftPercent, int middlePercent, int rightPercent) {

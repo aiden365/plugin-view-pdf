@@ -1,1 +1,1 @@
-rootProject.name = "view-pdf"
+rootProject.name = "xcode-tools"

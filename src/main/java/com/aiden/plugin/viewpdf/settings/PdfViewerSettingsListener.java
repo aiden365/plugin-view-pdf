@@ -34,5 +34,7 @@ public interface PdfViewerSettingsListener {
 
     void editorPopupSizeChanged(int width, int height);
 
+    void editorPopupBorderVisibilityChanged(boolean visible);
+
     void renderBatchPageCountChanged(int pageCount);
 }

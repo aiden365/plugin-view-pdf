@@ -122,6 +122,10 @@ public final class PdfViewerToolWindowFactory implements ToolWindowFactory, Dumb
                     }
 
                     @Override
+                    public void editorPopupBorderVisibilityChanged(boolean visible) {
+                    }
+
+                    @Override
                     public void renderBatchPageCountChanged(int pageCount) {
                         splitPanel.getPdfPanel().setRenderBatchPageCount(pageCount);
                     }

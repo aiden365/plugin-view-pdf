@@ -45,12 +45,13 @@ public final class PdfViewerConfigurable implements Configurable {
     private JSpinner paneMiddleSpinner;
     private JSpinner paneRightSpinner;
     private JSpinner renderBatchPageCountSpinner;
+    private JCheckBox popupBorderVisibleCheckBox;
     private JSpinner editorPopupWidthSpinner;
     private JSpinner editorPopupHeightSpinner;
 
     @Override
     public @Nls(capitalization = Nls.Capitalization.Title) String getDisplayName() {
-        return "XCode Viewer";
+        return "XCode Tools";
     }
 
     @Override
@@ -194,16 +195,23 @@ public final class PdfViewerConfigurable implements Configurable {
             panel.add(batchPageCountPanel);
             panel.add(Box.createVerticalStrut(4));
 
+            JPanel popupBorderPanel = createRowPanel();
+            popupBorderPanel.add(new JLabel("显示弹框边框"));
+            popupBorderVisibleCheckBox = new JCheckBox();
+            popupBorderPanel.add(popupBorderVisibleCheckBox);
+            panel.add(popupBorderPanel);
+            panel.add(Box.createVerticalStrut(4));
+
             JPanel popupWidthPanel = createRowPanel();
             popupWidthPanel.add(new JLabel("悬浮窗默认宽度（px）"));
-            editorPopupWidthSpinner = new JSpinner(new SpinnerNumberModel(760, 300, 2000, 10));
+            editorPopupWidthSpinner = new JSpinner(new SpinnerNumberModel(760, 1, 2000, 10));
             popupWidthPanel.add(editorPopupWidthSpinner);
             panel.add(popupWidthPanel);
             panel.add(Box.createVerticalStrut(4));
 
             JPanel popupHeightPanel = createRowPanel();
             popupHeightPanel.add(new JLabel("悬浮窗默认高度（px）"));
-            editorPopupHeightSpinner = new JSpinner(new SpinnerNumberModel(520, 300, 2000, 10));
+            editorPopupHeightSpinner = new JSpinner(new SpinnerNumberModel(520, 1, 2000, 10));
             popupHeightPanel.add(editorPopupHeightSpinner);
             panel.add(popupHeightPanel);
         }
@@ -277,6 +285,9 @@ public final class PdfViewerConfigurable implements Configurable {
         if (settings.getRenderBatchPageCount() != renderBatchPageCount) {
             return true;
         }
+        if (settings.isEditorPopupBorderVisible() != popupBorderVisibleCheckBox.isSelected()) {
+            return true;
+        }
         int popupWidth = (int) editorPopupWidthSpinner.getValue();
         int popupHeight = (int) editorPopupHeightSpinner.getValue();
         return settings.getEditorPopupWidth() != popupWidth
@@ -301,6 +312,7 @@ public final class PdfViewerConfigurable implements Configurable {
                 (int) paneRightSpinner.getValue()
         );
         settings.setRenderBatchPageCount((int) renderBatchPageCountSpinner.getValue());
+        settings.setEditorPopupBorderVisible(popupBorderVisibleCheckBox.isSelected());
         settings.setEditorPopupSize(
                 (int) editorPopupWidthSpinner.getValue(),
                 (int) editorPopupHeightSpinner.getValue()
@@ -336,6 +348,7 @@ public final class PdfViewerConfigurable implements Configurable {
         paneMiddleSpinner.setValue(settings.getPaneMiddlePercent());
         paneRightSpinner.setValue(settings.getPaneRightPercent());
         renderBatchPageCountSpinner.setValue(settings.getRenderBatchPageCount());
+        popupBorderVisibleCheckBox.setSelected(settings.isEditorPopupBorderVisible());
         editorPopupWidthSpinner.setValue(settings.getEditorPopupWidth());
         editorPopupHeightSpinner.setValue(settings.getEditorPopupHeight());
     }
@@ -364,6 +377,7 @@ public final class PdfViewerConfigurable implements Configurable {
         paneMiddleSpinner = null;
         paneRightSpinner = null;
         renderBatchPageCountSpinner = null;
+        popupBorderVisibleCheckBox = null;
         editorPopupWidthSpinner = null;
         editorPopupHeightSpinner = null;
     }

@@ -5,7 +5,7 @@
 
     <!-- Public plugin name should be written in Title Case.
          Guidelines: https://plugins.jetbrains.com/docs/marketplace/best-practices-for-listing.html#plugin-name -->
-    <name>View-pdf</name>
+    <name>XCode Tools</name>
 
     <!-- A displayed Vendor name or Organization ID displayed on the Plugins Page. -->
     <vendor url="https://www.yourcompany.com">YourCompany</vendor>
@@ -28,11 +28,11 @@
 
         <applicationConfigurable
                 id="com.aiden.plugin.viewpdf.settings"
-                displayName="XCode Viewer"
+                displayName="XCode Tools"
                 instance="com.aiden.plugin.viewpdf.settings.PdfViewerConfigurable"/>
 
         <toolWindow
-                id="XCode Viewer"
+                id="XTools"
                 anchor="bottom"
                 factoryClass="com.aiden.plugin.viewpdf.ui.PdfViewerToolWindowFactory"/>
 
@@ -43,7 +43,7 @@
                 id="com.aiden.plugin.viewpdf.actions.ScrollPdfUp"
                 class="com.aiden.plugin.viewpdf.actions.ScrollPdfUpAction"
                 text="Scroll PDF Up"
-                description="Scroll the XCode Viewer up">
+                description="Scroll the XCode Tools up">
             <keyboard-shortcut keymap="$default" first-keystroke="ctrl alt PAGE_UP"/>
             <add-to-group group-id="ToolsMenu" anchor="last"/>
         </action>
@@ -52,7 +52,7 @@
                 id="com.aiden.plugin.viewpdf.actions.ScrollPdfDown"
                 class="com.aiden.plugin.viewpdf.actions.ScrollPdfDownAction"
                 text="Scroll PDF Down"
-                description="Scroll the XCode Viewer down">
+                description="Scroll the XCode Tools down">
             <keyboard-shortcut keymap="$default" first-keystroke="ctrl alt PAGE_DOWN"/>
             <add-to-group group-id="ToolsMenu" anchor="last"/>
         </action>

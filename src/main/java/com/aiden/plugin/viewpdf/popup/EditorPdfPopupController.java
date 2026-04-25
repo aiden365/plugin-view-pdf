@@ -21,17 +21,21 @@ import javax.swing.JComponent;
 import javax.swing.JPanel;
 import javax.swing.SwingUtilities;
 import java.awt.BorderLayout;
+import java.awt.Color;
 import java.awt.Component;
 import java.awt.Dimension;
 import java.awt.Point;
 import java.awt.Window;
 import java.awt.event.ComponentAdapter;
 import java.awt.event.ComponentEvent;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
 import java.util.HashMap;
 import java.util.Map;
 
 public final class EditorPdfPopupController implements Disposable {
     private static final int MIN_MARGIN = 16;
+    private static final Color POPUP_BORDER_COLOR = new Color(70, 70, 70);
 
     private final Project project;
     private final PdfViewerPanel pdfPanel;
@@ -42,6 +46,8 @@ public final class EditorPdfPopupController implements Disposable {
     private Dimension lastSessionSize;
     private Window trackedWindow;
     private ComponentAdapter trackedWindowListener;
+    private Point dragAnchorOnScreen;
+    private Point dragWindowStartOnScreen;
 
     public static @NotNull EditorPdfPopupController getOrCreate(@NotNull Project project) {
         EditorPdfPopupController existing = project.getUserData(PdfViewerKeys.EDITOR_POPUP_CONTROLLER_KEY);
@@ -57,7 +63,52 @@ public final class EditorPdfPopupController implements Disposable {
         this.project = project;
         this.pdfPanel = new PdfViewerPanel();
         this.contentPanel = new JPanel(new BorderLayout());
-        this.contentPanel.setBorder(BorderFactory.createEmptyBorder());
+        this.contentPanel.setOpaque(false);
+        MouseAdapter ctrlDragListener = new MouseAdapter() {
+            @Override
+            public void mousePressed(MouseEvent e) {
+                if (!e.isControlDown()) {
+                    dragAnchorOnScreen = null;
+                    dragWindowStartOnScreen = null;
+                    return;
+                }
+                Window window = SwingUtilities.getWindowAncestor(contentPanel);
+                if (window == null) {
+                    dragAnchorOnScreen = null;
+                    dragWindowStartOnScreen = null;
+                    return;
+                }
+                dragAnchorOnScreen = e.getLocationOnScreen();
+                dragWindowStartOnScreen = window.getLocationOnScreen();
+            }
+
+            @Override
+            public void mouseReleased(MouseEvent e) {
+                dragAnchorOnScreen = null;
+                dragWindowStartOnScreen = null;
+            }
+
+            @Override
+            public void mouseDragged(MouseEvent e) {
+                if (dragAnchorOnScreen == null || dragWindowStartOnScreen == null) {
+                    return;
+                }
+                Window window = SwingUtilities.getWindowAncestor(contentPanel);
+                if (window == null) {
+                    return;
+                }
+                Point now = e.getLocationOnScreen();
+                int dx = now.x - dragAnchorOnScreen.x;
+                int dy = now.y - dragAnchorOnScreen.y;
+                int targetX = dragWindowStartOnScreen.x + dx;
+                int targetY = dragWindowStartOnScreen.y + dy;
+                window.setLocation(targetX, targetY);
+                lastScreenLocation = new Point(targetX, targetY);
+            }
+        };
+        this.contentPanel.addMouseListener(ctrlDragListener);
+        this.contentPanel.addMouseMotionListener(ctrlDragListener);
+        this.pdfPanel.setRegionMouseListener(ctrlDragListener);
         this.contentPanel.add(pdfPanel.getComponent(), BorderLayout.CENTER);
         pdfPanel.setReadingPositionHandlers(
                 path -> sessionReadPositions.getOrDefault(path, 0),
@@ -141,6 +192,11 @@ public final class EditorPdfPopupController implements Disposable {
                     }
 
                     @Override
+                    public void editorPopupBorderVisibilityChanged(boolean visible) {
+                        applyPopupBorderVisibility(visible);
+                    }
+
+                    @Override
                     public void renderBatchPageCountChanged(int pageCount) {
                         pdfPanel.setRenderBatchPageCount(pageCount);
                     }
@@ -156,12 +212,12 @@ public final class EditorPdfPopupController implements Disposable {
 
         Dimension popupSize = resolvePopupSize(settings);
         contentPanel.setPreferredSize(popupSize);
-        contentPanel.setMinimumSize(new Dimension(300, 300));
+        contentPanel.setMinimumSize(new Dimension(1, 1));
 
         popup = JBPopupFactory.getInstance()
                 .createComponentPopupBuilder(contentPanel, (JComponent) pdfPanel.getComponent())
                 .setProject(project)
-                .setMovable(true)
+                .setMovable(false)
                 .setResizable(true)
                 .setCancelOnClickOutside(true)
                 .setCancelOnWindowDeactivation(true)
@@ -189,6 +245,17 @@ public final class EditorPdfPopupController implements Disposable {
         pdfPanel.setTextColor(settings.getPdfTextColor());
         pdfPanel.setZoomPercent(settings.getPdfZoomPercent());
         pdfPanel.setRenderBatchPageCount(settings.getRenderBatchPageCount());
+        applyPopupBorderVisibility(settings.isEditorPopupBorderVisible());
+    }
+
+    private void applyPopupBorderVisibility(boolean visible) {
+        if (visible) {
+            contentPanel.setBorder(BorderFactory.createLineBorder(POPUP_BORDER_COLOR, 1));
+        } else {
+            contentPanel.setBorder(BorderFactory.createEmptyBorder());
+        }
+        contentPanel.revalidate();
+        contentPanel.repaint();
     }
 
     private @NotNull Dimension resolvePopupSize(@NotNull PdfViewerSettings settings) {
