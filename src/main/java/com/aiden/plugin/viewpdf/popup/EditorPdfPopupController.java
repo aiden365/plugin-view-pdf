@@ -219,6 +219,8 @@ public final class EditorPdfPopupController implements Disposable {
                 .setProject(project)
                 .setMovable(false)
                 .setResizable(true)
+                .setShowBorder(false)
+                .setShowShadow(false)
                 .setCancelOnClickOutside(true)
                 .setCancelOnWindowDeactivation(true)
                 .setCancelKeyEnabled(true)
