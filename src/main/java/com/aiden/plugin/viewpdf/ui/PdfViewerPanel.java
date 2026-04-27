@@ -18,12 +18,17 @@ import javax.swing.JScrollPane;
 import javax.swing.JScrollBar;
 import javax.swing.SwingWorker;
 import javax.swing.Timer;
+import javax.swing.SwingUtilities;
+import javax.swing.plaf.basic.BasicScrollBarUI;
 import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Component;
 import java.awt.Dimension;
+import java.awt.Graphics;
 import java.awt.Graphics2D;
+import java.awt.Point;
 import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.util.ArrayList;
@@ -38,17 +43,21 @@ public final class PdfViewerPanel implements Disposable {
     private static final Color DEFAULT_BACKGROUND = new Color(43, 45, 48);
     private static final int DEFAULT_PAGES_PER_BATCH = 50;
     private static final int NEXT_BATCH_THRESHOLD_PX = 400;
-    private static final int SCROLLBAR_HIDE_DELAY_MS = 900;
+    private static final int SLIM_SCROLLBAR_THICKNESS = 6;
 
     private final JPanel root;
     private final JBScrollPane scrollPane;
     private final JPanel pagesPanel;
     private final JLabel messageLabel;
-    private final Timer scrollbarHideTimer;
 
     private Color backgroundColor;
     private Color textColor = new Color(220, 220, 220);
     private MouseAdapter regionMouseListener;
+    private final MouseAdapter dragPanListener;
+    private boolean dragPanEnabled;
+    private boolean panning;
+    private @Nullable Point panAnchorOnScreen;
+    private @Nullable Point panStartViewPosition;
     private int zoomPercent = 100;
     private @Nullable String currentPdfPath;
     private int pendingRestoreScrollValue;
@@ -81,17 +90,55 @@ public final class PdfViewerPanel implements Disposable {
         pagesPanel = new JPanel();
         pagesPanel.setLayout(new javax.swing.BoxLayout(pagesPanel, javax.swing.BoxLayout.Y_AXIS));
         scrollPane = new JBScrollPane(pagesPanel);
-        scrollPane.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
-        scrollbarHideTimer = new Timer(SCROLLBAR_HIDE_DELAY_MS, e -> hideVerticalScrollBarNow());
-        scrollbarHideTimer.setRepeats(false);
-        hideVerticalScrollBarNow();
+        scrollPane.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED);
+        scrollPane.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED);
+        installSlimScrollBars();
         scrollPane.getVerticalScrollBar().addAdjustmentListener(e -> {
-            if (!suppressAutoSave) {
-                showVerticalScrollBarTemporarily();
-            }
             saveCurrentReadingPosition();
             maybeRequestNextBatch();
         });
+
+        dragPanListener = new MouseAdapter() {
+            @Override
+            public void mousePressed(MouseEvent e) {
+                if (!dragPanEnabled || !javax.swing.SwingUtilities.isLeftMouseButton(e) || e.isControlDown()) {
+                    resetPanState();
+                    return;
+                }
+                panAnchorOnScreen = e.getLocationOnScreen();
+                panStartViewPosition = scrollPane.getViewport().getViewPosition();
+                panning = true;
+            }
+
+            @Override
+            public void mouseReleased(MouseEvent e) {
+                resetPanState();
+            }
+
+            @Override
+            public void mouseDragged(MouseEvent e) {
+                if (!panning || panAnchorOnScreen == null) {
+                    return;
+                }
+                Point now = e.getLocationOnScreen();
+                int dx = now.x - panAnchorOnScreen.x;
+                int dy = now.y - panAnchorOnScreen.y;
+                Point start = panStartViewPosition == null ? new Point(0, 0) : panStartViewPosition;
+                Component view = scrollPane.getViewport().getView();
+                if (view != null) {
+                    Dimension viewSize = view.getPreferredSize();
+                    Dimension extent = scrollPane.getViewport().getExtentSize();
+                    int maxX = Math.max(0, viewSize.width - extent.width);
+                    int maxY = Math.max(0, viewSize.height - extent.height);
+                    int targetX = clamp(start.x - dx, 0, maxX);
+                    int targetY = clamp(start.y - dy, 0, maxY);
+                    Point current = scrollPane.getViewport().getViewPosition();
+                    if (current.x != targetX || current.y != targetY) {
+                        scrollPane.getViewport().setViewPosition(new Point(targetX, targetY));
+                    }
+                }
+            }
+        };
     }
 
     public @NotNull JComponent getComponent() {
@@ -113,6 +160,20 @@ public final class PdfViewerPanel implements Disposable {
         }
         regionMouseListener = listener;
         addMouseListenerRecursively(root, listener);
+    }
+
+    public void setDragPanEnabled(boolean enabled) {
+        if (dragPanEnabled == enabled) {
+            return;
+        }
+        dragPanEnabled = enabled;
+        if (!enabled) {
+            resetPanState();
+        }
+    }
+
+    public boolean isPanning() {
+        return panning;
     }
 
     public void setZoomPercent(int percent) {
@@ -260,7 +321,6 @@ public final class PdfViewerPanel implements Disposable {
 
     public void scrollByViewport(boolean down) {
         JScrollPane sp = scrollPane;
-        showVerticalScrollBarTemporarily();
         int extent = sp.getViewport().getExtentSize().height;
         int delta = Math.max(1, (int) (extent * 0.9));
         int direction = down ? 1 : -1;
@@ -404,7 +464,6 @@ public final class PdfViewerPanel implements Disposable {
 
     private void showLoading() {
         ApplicationManager.getApplication().invokeLater(() -> {
-            hideVerticalScrollBarNow();
             pagesPanel.removeAll();
             root.removeAll();
             messageLabel.setText("正在加载 PDF...");
@@ -419,7 +478,6 @@ public final class PdfViewerPanel implements Disposable {
         if (root.getComponentCount() == 1 && root.getComponent(0) == scrollPane) {
             return;
         }
-        hideVerticalScrollBarNow();
         root.removeAll();
         applyBackgroundColor();
         root.add(scrollPane, BorderLayout.CENTER);
@@ -427,17 +485,15 @@ public final class PdfViewerPanel implements Disposable {
         root.repaint();
     }
 
-    private void showVerticalScrollBarTemporarily() {
-        JScrollBar bar = scrollPane.getVerticalScrollBar();
-        if (!bar.isVisible()) {
-            bar.setVisible(true);
-        }
-        scrollbarHideTimer.restart();
-    }
-
-    private void hideVerticalScrollBarNow() {
-        scrollbarHideTimer.stop();
-        scrollPane.getVerticalScrollBar().setVisible(false);
+    private void installSlimScrollBars() {
+        JScrollBar vBar = scrollPane.getVerticalScrollBar();
+        JScrollBar hBar = scrollPane.getHorizontalScrollBar();
+        vBar.setPreferredSize(new Dimension(SLIM_SCROLLBAR_THICKNESS, Integer.MAX_VALUE));
+        hBar.setPreferredSize(new Dimension(Integer.MAX_VALUE, SLIM_SCROLLBAR_THICKNESS));
+        vBar.setUI(new SlimScrollBarUI());
+        hBar.setUI(new SlimScrollBarUI());
+        vBar.setOpaque(false);
+        hBar.setOpaque(false);
     }
 
     private void applyBackgroundColor() {
@@ -463,6 +519,8 @@ public final class PdfViewerPanel implements Disposable {
         label.setOpaque(true);
         label.setBackground(backgroundColor == null ? Color.DARK_GRAY : backgroundColor);
         label.setBorder(javax.swing.BorderFactory.createEmptyBorder(8, 8, 8, 8));
+        label.addMouseListener(dragPanListener);
+        label.addMouseMotionListener(dragPanListener);
         if (regionMouseListener != null) {
             label.addMouseListener(regionMouseListener);
             label.addMouseMotionListener(regionMouseListener);
@@ -472,6 +530,8 @@ public final class PdfViewerPanel implements Disposable {
         JPanel spacer = new JPanel();
         spacer.setOpaque(false);
         spacer.setPreferredSize(new Dimension(1, 12));
+        spacer.addMouseListener(dragPanListener);
+        spacer.addMouseMotionListener(dragPanListener);
         if (regionMouseListener != null) {
             spacer.addMouseListener(regionMouseListener);
             spacer.addMouseMotionListener(regionMouseListener);
@@ -535,9 +595,65 @@ public final class PdfViewerPanel implements Disposable {
     @Override
     public void dispose() {
         saveCurrentReadingPosition();
+        resetPanState();
         cancelRestoreTimer();
         cancelWorker();
-        scrollbarHideTimer.stop();
+    }
+
+    private void resetPanState() {
+        panning = false;
+        panAnchorOnScreen = null;
+        panStartViewPosition = null;
+    }
+
+    private static int clamp(int value, int min, int max) {
+        return Math.max(min, Math.min(max, value));
+    }
+
+    private static final class SlimScrollBarUI extends BasicScrollBarUI {
+        private static final Color THUMB = new Color(120, 120, 120, 140);
+        private static final Color THUMB_HOVER = new Color(150, 150, 150, 170);
+
+        @Override
+        protected void paintTrack(Graphics g, JComponent c, java.awt.Rectangle trackBounds) {
+            // Keep track fully transparent for stealth appearance.
+        }
+
+        @Override
+        protected void paintThumb(Graphics g, JComponent c, java.awt.Rectangle thumbBounds) {
+            if (thumbBounds.isEmpty() || !scrollbar.isEnabled()) {
+                return;
+            }
+            Graphics2D g2 = (Graphics2D) g.create();
+            g2.setColor(isThumbRollover() ? THUMB_HOVER : THUMB);
+            g2.fillRoundRect(
+                    thumbBounds.x,
+                    thumbBounds.y,
+                    thumbBounds.width,
+                    thumbBounds.height,
+                    6,
+                    6
+            );
+            g2.dispose();
+        }
+
+        @Override
+        protected javax.swing.JButton createDecreaseButton(int orientation) {
+            return createZeroButton();
+        }
+
+        @Override
+        protected javax.swing.JButton createIncreaseButton(int orientation) {
+            return createZeroButton();
+        }
+
+        private static javax.swing.JButton createZeroButton() {
+            javax.swing.JButton button = new javax.swing.JButton();
+            button.setPreferredSize(new Dimension(0, 0));
+            button.setMinimumSize(new Dimension(0, 0));
+            button.setMaximumSize(new Dimension(0, 0));
+            return button;
+        }
     }
 
     private record BatchRenderResult(

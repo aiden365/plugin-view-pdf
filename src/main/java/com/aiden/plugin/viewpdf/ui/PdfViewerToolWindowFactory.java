@@ -126,6 +126,14 @@ public final class PdfViewerToolWindowFactory implements ToolWindowFactory, Dumb
                     }
 
                     @Override
+                    public void editorPopupPdfBackgroundChanged(@NotNull java.awt.Color newBackgroundColor) {
+                    }
+
+                    @Override
+                    public void editorPopupPdfTextColorChanged(@NotNull java.awt.Color newTextColor) {
+                    }
+
+                    @Override
                     public void renderBatchPageCountChanged(int pageCount) {
                         splitPanel.getPdfPanel().setRenderBatchPageCount(pageCount);
                     }

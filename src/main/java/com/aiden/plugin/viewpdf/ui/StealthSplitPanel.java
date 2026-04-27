@@ -62,6 +62,7 @@ public final class StealthSplitPanel implements Disposable {
             fixedCodePanel.setFile(vf);
         });
         pdfViewerPanel = new PdfViewerPanel();
+        pdfViewerPanel.setDragPanEnabled(true);
 
         cardLayout = new CardLayout();
         rightCards = new JPanel(cardLayout);
@@ -131,7 +132,7 @@ public final class StealthSplitPanel implements Disposable {
                     return;
                 }
                 SwingUtilities.invokeLater(() -> {
-                    if (isPdfShown() && !isPointerInsideComponent(pdfViewerPanel.getComponent())) {
+                    if (isPdfShown() && !pdfViewerPanel.isPanning() && !isPointerInsideComponent(pdfViewerPanel.getComponent())) {
                         showDisguise();
                     }
                 });

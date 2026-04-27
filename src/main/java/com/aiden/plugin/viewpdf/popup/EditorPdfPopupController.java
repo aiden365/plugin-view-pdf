@@ -62,6 +62,7 @@ public final class EditorPdfPopupController implements Disposable {
     private EditorPdfPopupController(@NotNull Project project) {
         this.project = project;
         this.pdfPanel = new PdfViewerPanel();
+        this.pdfPanel.setDragPanEnabled(true);
         this.contentPanel = new JPanel(new BorderLayout());
         this.contentPanel.setOpaque(false);
         MouseAdapter ctrlDragListener = new MouseAdapter() {
@@ -134,10 +135,6 @@ public final class EditorPdfPopupController implements Disposable {
 
                     @Override
                     public void pdfBackgroundChanged(@NotNull java.awt.Color newBackgroundColor) {
-                        pdfPanel.setBackgroundColor(newBackgroundColor);
-                        if (isPopupActive() && PdfViewerSettings.getInstance().isNightModeEnabled()) {
-                            pdfPanel.ensureLoaded(PdfViewerSettings.getInstance().getPdfPath(), true);
-                        }
                     }
 
                     @Override
@@ -154,10 +151,6 @@ public final class EditorPdfPopupController implements Disposable {
 
                     @Override
                     public void pdfTextColorChanged(@NotNull java.awt.Color newTextColor) {
-                        pdfPanel.setTextColor(newTextColor);
-                        if (isPopupActive() && PdfViewerSettings.getInstance().isNightModeEnabled()) {
-                            pdfPanel.ensureLoaded(PdfViewerSettings.getInstance().getPdfPath(), true);
-                        }
                     }
 
                     @Override
@@ -194,6 +187,22 @@ public final class EditorPdfPopupController implements Disposable {
                     @Override
                     public void editorPopupBorderVisibilityChanged(boolean visible) {
                         applyPopupBorderVisibility(visible);
+                    }
+
+                    @Override
+                    public void editorPopupPdfBackgroundChanged(@NotNull java.awt.Color newBackgroundColor) {
+                        pdfPanel.setBackgroundColor(newBackgroundColor);
+                        if (isPopupActive() && PdfViewerSettings.getInstance().isNightModeEnabled()) {
+                            pdfPanel.ensureLoaded(PdfViewerSettings.getInstance().getPdfPath(), true);
+                        }
+                    }
+
+                    @Override
+                    public void editorPopupPdfTextColorChanged(@NotNull java.awt.Color newTextColor) {
+                        pdfPanel.setTextColor(newTextColor);
+                        if (isPopupActive() && PdfViewerSettings.getInstance().isNightModeEnabled()) {
+                            pdfPanel.ensureLoaded(PdfViewerSettings.getInstance().getPdfPath(), true);
+                        }
                     }
 
                     @Override
@@ -243,8 +252,8 @@ public final class EditorPdfPopupController implements Disposable {
     }
 
     private void applySharedPdfSettings(@NotNull PdfViewerSettings settings) {
-        pdfPanel.setBackgroundColor(settings.getPdfBackgroundColor());
-        pdfPanel.setTextColor(settings.getPdfTextColor());
+        pdfPanel.setBackgroundColor(settings.getEditorPopupPdfBackgroundColor());
+        pdfPanel.setTextColor(settings.getEditorPopupPdfTextColor());
         pdfPanel.setZoomPercent(settings.getPdfZoomPercent());
         pdfPanel.setRenderBatchPageCount(settings.getRenderBatchPageCount());
         applyPopupBorderVisibility(settings.isEditorPopupBorderVisible());

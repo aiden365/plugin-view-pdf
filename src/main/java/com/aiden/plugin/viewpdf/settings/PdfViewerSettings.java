@@ -23,12 +23,18 @@ public final class PdfViewerSettings implements PersistentStateComponent<PdfView
     private static final int DEFAULT_TEXT_R = 220;
     private static final int DEFAULT_TEXT_G = 220;
     private static final int DEFAULT_TEXT_B = 220;
-    private static final int DEFAULT_TREE_BG_R = 43;
-    private static final int DEFAULT_TREE_BG_G = 45;
-    private static final int DEFAULT_TREE_BG_B = 48;
-    private static final int DEFAULT_TREE_TEXT_R = 220;
-    private static final int DEFAULT_TREE_TEXT_G = 220;
-    private static final int DEFAULT_TREE_TEXT_B = 220;
+    private static final int DEFAULT_TREE_BG_R = 30;
+    private static final int DEFAULT_TREE_BG_G = 31;
+    private static final int DEFAULT_TREE_BG_B = 34;
+    private static final int DEFAULT_TREE_TEXT_R = 122;
+    private static final int DEFAULT_TREE_TEXT_G = 126;
+    private static final int DEFAULT_TREE_TEXT_B = 133;
+    private static final int DEFAULT_POPUP_BG_R = 30;
+    private static final int DEFAULT_POPUP_BG_G = 31;
+    private static final int DEFAULT_POPUP_BG_B = 34;
+    private static final int DEFAULT_POPUP_TEXT_R = 122;
+    private static final int DEFAULT_POPUP_TEXT_G = 126;
+    private static final int DEFAULT_POPUP_TEXT_B = 133;
     private static final int DEFAULT_TREE_FONT_SIZE = 12;
     private static final int DEFAULT_HOVER_SECONDS = -1;
     private static final int DEFAULT_ZOOM_PERCENT = 100;
@@ -66,6 +72,12 @@ public final class PdfViewerSettings implements PersistentStateComponent<PdfView
         public Integer editorPopupWidth;
         public Integer editorPopupHeight;
         public Boolean editorPopupBorderVisible;
+        public Integer editorPopupPdfBackgroundR;
+        public Integer editorPopupPdfBackgroundG;
+        public Integer editorPopupPdfBackgroundB;
+        public Integer editorPopupPdfTextR;
+        public Integer editorPopupPdfTextG;
+        public Integer editorPopupPdfTextB;
     }
 
     private StateData state = new StateData();
@@ -421,6 +433,74 @@ public final class PdfViewerSettings implements PersistentStateComponent<PdfView
                 .getMessageBus()
                 .syncPublisher(PdfViewerSettingsListener.TOPIC)
                 .editorPopupBorderVisibilityChanged(visible);
+    }
+
+    public int getEditorPopupPdfBackgroundR() {
+        return state.editorPopupPdfBackgroundR == null ? DEFAULT_POPUP_BG_R : clampColorChannel(state.editorPopupPdfBackgroundR);
+    }
+
+    public int getEditorPopupPdfBackgroundG() {
+        return state.editorPopupPdfBackgroundG == null ? DEFAULT_POPUP_BG_G : clampColorChannel(state.editorPopupPdfBackgroundG);
+    }
+
+    public int getEditorPopupPdfBackgroundB() {
+        return state.editorPopupPdfBackgroundB == null ? DEFAULT_POPUP_BG_B : clampColorChannel(state.editorPopupPdfBackgroundB);
+    }
+
+    public @NotNull Color getEditorPopupPdfBackgroundColor() {
+        return new Color(getEditorPopupPdfBackgroundR(), getEditorPopupPdfBackgroundG(), getEditorPopupPdfBackgroundB());
+    }
+
+    public void setEditorPopupPdfBackgroundRgb(int r, int g, int b) {
+        int nr = clampColorChannel(r);
+        int ng = clampColorChannel(g);
+        int nb = clampColorChannel(b);
+        if (getEditorPopupPdfBackgroundR() == nr
+                && getEditorPopupPdfBackgroundG() == ng
+                && getEditorPopupPdfBackgroundB() == nb) {
+            return;
+        }
+        state.editorPopupPdfBackgroundR = nr;
+        state.editorPopupPdfBackgroundG = ng;
+        state.editorPopupPdfBackgroundB = nb;
+        ApplicationManager.getApplication()
+                .getMessageBus()
+                .syncPublisher(PdfViewerSettingsListener.TOPIC)
+                .editorPopupPdfBackgroundChanged(new Color(nr, ng, nb));
+    }
+
+    public int getEditorPopupPdfTextR() {
+        return state.editorPopupPdfTextR == null ? DEFAULT_POPUP_TEXT_R : clampColorChannel(state.editorPopupPdfTextR);
+    }
+
+    public int getEditorPopupPdfTextG() {
+        return state.editorPopupPdfTextG == null ? DEFAULT_POPUP_TEXT_G : clampColorChannel(state.editorPopupPdfTextG);
+    }
+
+    public int getEditorPopupPdfTextB() {
+        return state.editorPopupPdfTextB == null ? DEFAULT_POPUP_TEXT_B : clampColorChannel(state.editorPopupPdfTextB);
+    }
+
+    public @NotNull Color getEditorPopupPdfTextColor() {
+        return new Color(getEditorPopupPdfTextR(), getEditorPopupPdfTextG(), getEditorPopupPdfTextB());
+    }
+
+    public void setEditorPopupPdfTextRgb(int r, int g, int b) {
+        int nr = clampColorChannel(r);
+        int ng = clampColorChannel(g);
+        int nb = clampColorChannel(b);
+        if (getEditorPopupPdfTextR() == nr
+                && getEditorPopupPdfTextG() == ng
+                && getEditorPopupPdfTextB() == nb) {
+            return;
+        }
+        state.editorPopupPdfTextR = nr;
+        state.editorPopupPdfTextG = ng;
+        state.editorPopupPdfTextB = nb;
+        ApplicationManager.getApplication()
+                .getMessageBus()
+                .syncPublisher(PdfViewerSettingsListener.TOPIC)
+                .editorPopupPdfTextColorChanged(new Color(nr, ng, nb));
     }
 
     public int getPdfReadPosition(@Nullable String pdfPath) {

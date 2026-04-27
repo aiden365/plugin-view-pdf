@@ -46,6 +46,12 @@ public final class PdfViewerConfigurable implements Configurable {
     private JSpinner paneRightSpinner;
     private JSpinner renderBatchPageCountSpinner;
     private JCheckBox popupBorderVisibleCheckBox;
+    private JSpinner popupBgRSpinner;
+    private JSpinner popupBgGSpinner;
+    private JSpinner popupBgBSpinner;
+    private JSpinner popupTextRSpinner;
+    private JSpinner popupTextGSpinner;
+    private JSpinner popupTextBSpinner;
     private JSpinner editorPopupWidthSpinner;
     private JSpinner editorPopupHeightSpinner;
 
@@ -202,6 +208,28 @@ public final class PdfViewerConfigurable implements Configurable {
             panel.add(popupBorderPanel);
             panel.add(Box.createVerticalStrut(4));
 
+            JPanel popupBgPanel = createRowPanel();
+            popupBgPanel.add(new JLabel("弹框PDF背景色 (RGB)"));
+            popupBgRSpinner = new JSpinner(new SpinnerNumberModel(30, 0, 255, 1));
+            popupBgGSpinner = new JSpinner(new SpinnerNumberModel(31, 0, 255, 1));
+            popupBgBSpinner = new JSpinner(new SpinnerNumberModel(34, 0, 255, 1));
+            popupBgPanel.add(popupBgRSpinner);
+            popupBgPanel.add(popupBgGSpinner);
+            popupBgPanel.add(popupBgBSpinner);
+            panel.add(popupBgPanel);
+            panel.add(Box.createVerticalStrut(4));
+
+            JPanel popupTextPanel = createRowPanel();
+            popupTextPanel.add(new JLabel("弹框PDF文字颜色 (RGB)"));
+            popupTextRSpinner = new JSpinner(new SpinnerNumberModel(122, 0, 255, 1));
+            popupTextGSpinner = new JSpinner(new SpinnerNumberModel(126, 0, 255, 1));
+            popupTextBSpinner = new JSpinner(new SpinnerNumberModel(133, 0, 255, 1));
+            popupTextPanel.add(popupTextRSpinner);
+            popupTextPanel.add(popupTextGSpinner);
+            popupTextPanel.add(popupTextBSpinner);
+            panel.add(popupTextPanel);
+            panel.add(Box.createVerticalStrut(4));
+
             JPanel popupWidthPanel = createRowPanel();
             popupWidthPanel.add(new JLabel("悬浮窗默认宽度（px）"));
             editorPopupWidthSpinner = new JSpinner(new SpinnerNumberModel(760, 1, 2000, 10));
@@ -288,6 +316,22 @@ public final class PdfViewerConfigurable implements Configurable {
         if (settings.isEditorPopupBorderVisible() != popupBorderVisibleCheckBox.isSelected()) {
             return true;
         }
+        int pbr = (int) popupBgRSpinner.getValue();
+        int pbg = (int) popupBgGSpinner.getValue();
+        int pbb = (int) popupBgBSpinner.getValue();
+        if (settings.getEditorPopupPdfBackgroundR() != pbr
+                || settings.getEditorPopupPdfBackgroundG() != pbg
+                || settings.getEditorPopupPdfBackgroundB() != pbb) {
+            return true;
+        }
+        int ptr = (int) popupTextRSpinner.getValue();
+        int ptg = (int) popupTextGSpinner.getValue();
+        int ptb = (int) popupTextBSpinner.getValue();
+        if (settings.getEditorPopupPdfTextR() != ptr
+                || settings.getEditorPopupPdfTextG() != ptg
+                || settings.getEditorPopupPdfTextB() != ptb) {
+            return true;
+        }
         int popupWidth = (int) editorPopupWidthSpinner.getValue();
         int popupHeight = (int) editorPopupHeightSpinner.getValue();
         return settings.getEditorPopupWidth() != popupWidth
@@ -313,6 +357,16 @@ public final class PdfViewerConfigurable implements Configurable {
         );
         settings.setRenderBatchPageCount((int) renderBatchPageCountSpinner.getValue());
         settings.setEditorPopupBorderVisible(popupBorderVisibleCheckBox.isSelected());
+        settings.setEditorPopupPdfBackgroundRgb(
+                (int) popupBgRSpinner.getValue(),
+                (int) popupBgGSpinner.getValue(),
+                (int) popupBgBSpinner.getValue()
+        );
+        settings.setEditorPopupPdfTextRgb(
+                (int) popupTextRSpinner.getValue(),
+                (int) popupTextGSpinner.getValue(),
+                (int) popupTextBSpinner.getValue()
+        );
         settings.setEditorPopupSize(
                 (int) editorPopupWidthSpinner.getValue(),
                 (int) editorPopupHeightSpinner.getValue()
@@ -349,6 +403,12 @@ public final class PdfViewerConfigurable implements Configurable {
         paneRightSpinner.setValue(settings.getPaneRightPercent());
         renderBatchPageCountSpinner.setValue(settings.getRenderBatchPageCount());
         popupBorderVisibleCheckBox.setSelected(settings.isEditorPopupBorderVisible());
+        popupBgRSpinner.setValue(settings.getEditorPopupPdfBackgroundR());
+        popupBgGSpinner.setValue(settings.getEditorPopupPdfBackgroundG());
+        popupBgBSpinner.setValue(settings.getEditorPopupPdfBackgroundB());
+        popupTextRSpinner.setValue(settings.getEditorPopupPdfTextR());
+        popupTextGSpinner.setValue(settings.getEditorPopupPdfTextG());
+        popupTextBSpinner.setValue(settings.getEditorPopupPdfTextB());
         editorPopupWidthSpinner.setValue(settings.getEditorPopupWidth());
         editorPopupHeightSpinner.setValue(settings.getEditorPopupHeight());
     }
@@ -378,6 +438,12 @@ public final class PdfViewerConfigurable implements Configurable {
         paneRightSpinner = null;
         renderBatchPageCountSpinner = null;
         popupBorderVisibleCheckBox = null;
+        popupBgRSpinner = null;
+        popupBgGSpinner = null;
+        popupBgBSpinner = null;
+        popupTextRSpinner = null;
+        popupTextGSpinner = null;
+        popupTextBSpinner = null;
         editorPopupWidthSpinner = null;
         editorPopupHeightSpinner = null;
     }

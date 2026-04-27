@@ -36,5 +36,9 @@ public interface PdfViewerSettingsListener {
 
     void editorPopupBorderVisibilityChanged(boolean visible);
 
+    void editorPopupPdfBackgroundChanged(@NotNull Color newBackgroundColor);
+
+    void editorPopupPdfTextColorChanged(@NotNull Color newTextColor);
+
     void renderBatchPageCountChanged(int pageCount);
 }
