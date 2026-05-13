@@ -31,6 +31,8 @@
                 displayName="XCode Tools"
                 instance="com.aiden.plugin.viewpdf.settings.PdfViewerConfigurable"/>
 
+        <postStartupActivity implementation="com.aiden.plugin.viewpdf.settings.WordLibraryStartupActivity"/>
+
         <toolWindow
                 id="XTools"
                 anchor="bottom"
@@ -71,6 +73,32 @@
                 class="com.aiden.plugin.viewpdf.actions.ShowEditorPdfPopupAction"
                 text="Show Editor PDF Popup"
                 description="Show a floating PDF popup in editor">
+            <add-to-group group-id="ToolsMenu" anchor="last"/>
+        </action>
+
+        <action
+                id="com.aiden.plugin.viewpdf.actions.ToggleWordPopup"
+                class="com.aiden.plugin.viewpdf.actions.ToggleWordPopupAction"
+                text="显示/隐藏单词悬浮框"
+                description="显示或隐藏背单词悬浮框">
+            <keyboard-shortcut keymap="$default" first-keystroke="ctrl alt W"/>
+            <add-to-group group-id="ToolsMenu" anchor="last"/>
+        </action>
+
+        <action
+                id="com.aiden.plugin.viewpdf.actions.NextWord"
+                class="com.aiden.plugin.viewpdf.actions.NextWordAction"
+                text="下一个单词"
+                description="切换到下一个待学习单词">
+            <keyboard-shortcut keymap="$default" first-keystroke="ctrl alt N"/>
+            <add-to-group group-id="ToolsMenu" anchor="last"/>
+        </action>
+
+        <action
+                id="com.aiden.plugin.viewpdf.actions.MarkWordMastered"
+                class="com.aiden.plugin.viewpdf.actions.MarkWordMasteredAction"
+                text="切换已学会状态"
+                description="切换当前单词为已学会或未学会并持久化">
             <add-to-group group-id="ToolsMenu" anchor="last"/>
         </action>
     </actions>

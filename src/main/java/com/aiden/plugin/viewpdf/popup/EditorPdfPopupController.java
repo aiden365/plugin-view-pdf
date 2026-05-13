@@ -31,6 +31,7 @@ import java.awt.event.ComponentEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 public final class EditorPdfPopupController implements Disposable {
@@ -209,6 +210,23 @@ public final class EditorPdfPopupController implements Disposable {
                     public void renderBatchPageCountChanged(int pageCount) {
                         pdfPanel.setRenderBatchPageCount(pageCount);
                     }
+
+                    @Override
+                    public void editorPopupOpacityChanged(int percent) {
+                        applyWindowOpacity(percent);
+                    }
+
+                    @Override
+                    public void wordPopupStyleChanged(int width, int height, int x, int y, int fontSize, @NotNull Color fontColor) {
+                    }
+
+                    @Override
+                    public void wordSourceChanged(boolean builtinEnabled, @Nullable String customPath) {
+                    }
+
+                    @Override
+                    public void wordCategoryFiltersChanged(@NotNull List<String> difficulties, @NotNull List<String> themes, @NotNull List<String> sources) {
+                    }
                 });
     }
 
@@ -248,6 +266,7 @@ public final class EditorPdfPopupController implements Disposable {
         Point target = resolvePopupLocation(editor, popupSize);
         popup.show(new RelativePoint(editor.getContentComponent(), target));
         attachWindowTracking();
+        applyWindowOpacity(settings.getEditorPopupOpacityPercent());
         pdfPanel.ensureLoaded(settings.getPdfPath(), settings.isNightModeEnabled());
     }
 
@@ -314,6 +333,24 @@ public final class EditorPdfPopupController implements Disposable {
             }
         };
         window.addComponentListener(trackedWindowListener);
+    }
+
+    private void applyWindowOpacity(int percent) {
+        if (!isPopupActive()) {
+            return;
+        }
+        Window window = trackedWindow;
+        if (window == null) {
+            window = SwingUtilities.getWindowAncestor(contentPanel);
+        }
+        if (window == null) {
+            return;
+        }
+        float alpha = Math.max(0.10f, Math.min(1.0f, percent / 100f));
+        try {
+            window.setOpacity(alpha);
+        } catch (Throwable ignored) {
+        }
     }
 
     private void detachWindowTracking() {

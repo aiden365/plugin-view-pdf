@@ -8,7 +8,11 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.awt.Color;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 
@@ -44,6 +48,54 @@ public final class PdfViewerSettings implements PersistentStateComponent<PdfView
     private static final int DEFAULT_RENDER_BATCH_PAGE_COUNT = 50;
     private static final int DEFAULT_EDITOR_POPUP_WIDTH = 760;
     private static final int DEFAULT_EDITOR_POPUP_HEIGHT = 520;
+    private static final int DEFAULT_WORD_POPUP_WIDTH = 360;
+    private static final int DEFAULT_WORD_POPUP_HEIGHT = 220;
+    private static final int DEFAULT_WORD_POPUP_X = 36;
+    private static final int DEFAULT_WORD_POPUP_Y = 36;
+    private static final int DEFAULT_WORD_POPUP_FONT_SIZE = 18;
+    private static final int DEFAULT_WORD_POPUP_FONT_R = 235;
+    private static final int DEFAULT_WORD_POPUP_FONT_G = 235;
+    private static final int DEFAULT_WORD_POPUP_FONT_B = 235;
+    private static final int DEFAULT_POPUP_OPACITY_PERCENT = 100;
+    private static final int MIN_POPUP_OPACITY_PERCENT = 10;
+    private static final int MAX_POPUP_OPACITY_PERCENT = 100;
+    private static final boolean DEFAULT_WORD_POPUP_SHOW_MEANING = false;
+    private static final boolean DEFAULT_WORD_POPUP_SHOW_SENTENCE = false;
+    private static final boolean DEFAULT_WORD_POPUP_SHOW_SYNONYMS = false;
+    private static final int DEFAULT_WORD_POPUP_SENTENCE_LIMIT = 1;
+    private static final String DEFAULT_WORD_BUILTIN_BOOK = "CET4luan_2";
+    private static final String BUILTIN_KEY_PREFIX = "builtin:";
+    private static final String CUSTOM_KEY_PREFIX = "custom:";
+
+    public static final class WordEntryData {
+        public String word;
+        public String meaning;
+        public String phonetic;
+        public String difficulty;
+        public String theme;
+        public String source;
+        public String sourceRef;
+        public String status;
+        public List<String> sentenceEnList;
+        public List<WordSynonymGroupData> synonymsByPos;
+    }
+
+    public static final class WordSynonymGroupData {
+        public String pos;
+        public List<String> words;
+    }
+
+    public static final class WordLearningStateData {
+        public Boolean mastered;
+        public Long lastReviewedAtEpochMillis;
+        public Integer reviewCount;
+    }
+
+    public static final class CustomVocabularyBookData {
+        public String name;
+        public String jsonlPath;
+        public Long createdAtEpochMillis;
+    }
 
     public static final class StateData {
         public String pdfPath;
@@ -78,6 +130,30 @@ public final class PdfViewerSettings implements PersistentStateComponent<PdfView
         public Integer editorPopupPdfTextR;
         public Integer editorPopupPdfTextG;
         public Integer editorPopupPdfTextB;
+        public Integer editorPopupOpacityPercent;
+        public Integer wordPopupWidth;
+        public Integer wordPopupHeight;
+        public Integer wordPopupX;
+        public Integer wordPopupY;
+        public Integer wordPopupFontSize;
+        public Integer wordPopupFontR;
+        public Integer wordPopupFontG;
+        public Integer wordPopupFontB;
+        public Integer wordPopupOpacityPercent;
+        public Boolean wordPopupShowMeaning;
+        public Boolean wordPopupShowSentence;
+        public Boolean wordPopupShowSynonyms;
+        public Integer wordPopupSentenceLimit;
+        public Boolean wordSourceBuiltinEnabled;
+        public String wordBuiltinVocabularyBook;
+        public List<CustomVocabularyBookData> customVocabularyBooks;
+        public String selectedVocabularyBookKey;
+        public String wordSourceCustomPath;
+        public List<String> wordFilterDifficulties;
+        public List<String> wordFilterThemes;
+        public List<String> wordFilterSources;
+        public List<WordEntryData> wordEntries;
+        public Map<String, WordLearningStateData> wordLearningStates;
     }
 
     private StateData state = new StateData();
@@ -503,6 +579,425 @@ public final class PdfViewerSettings implements PersistentStateComponent<PdfView
                 .editorPopupPdfTextColorChanged(new Color(nr, ng, nb));
     }
 
+    public int getEditorPopupOpacityPercent() {
+        Integer value = state.editorPopupOpacityPercent;
+        if (value == null) {
+            return DEFAULT_POPUP_OPACITY_PERCENT;
+        }
+        return clampPopupOpacityPercent(value);
+    }
+
+    public void setEditorPopupOpacityPercent(int percent) {
+        int normalized = clampPopupOpacityPercent(percent);
+        if (getEditorPopupOpacityPercent() == normalized) {
+            return;
+        }
+        state.editorPopupOpacityPercent = normalized;
+        ApplicationManager.getApplication()
+                .getMessageBus()
+                .syncPublisher(PdfViewerSettingsListener.TOPIC)
+                .editorPopupOpacityChanged(normalized);
+    }
+
+    public int getWordPopupWidth() {
+        Integer value = state.wordPopupWidth;
+        if (value == null) {
+            return DEFAULT_WORD_POPUP_WIDTH;
+        }
+        return clampWordPopupSize(value);
+    }
+
+    public int getWordPopupHeight() {
+        Integer value = state.wordPopupHeight;
+        if (value == null) {
+            return DEFAULT_WORD_POPUP_HEIGHT;
+        }
+        return clampWordPopupSize(value);
+    }
+
+    public int getWordPopupX() {
+        Integer value = state.wordPopupX;
+        if (value == null) {
+            return DEFAULT_WORD_POPUP_X;
+        }
+        return clampWordPopupCoordinate(value);
+    }
+
+    public int getWordPopupY() {
+        Integer value = state.wordPopupY;
+        if (value == null) {
+            return DEFAULT_WORD_POPUP_Y;
+        }
+        return clampWordPopupCoordinate(value);
+    }
+
+    public int getWordPopupFontSize() {
+        Integer value = state.wordPopupFontSize;
+        if (value == null) {
+            return DEFAULT_WORD_POPUP_FONT_SIZE;
+        }
+        return clampWordPopupFontSize(value);
+    }
+
+    public int getWordPopupFontR() {
+        return state.wordPopupFontR == null ? DEFAULT_WORD_POPUP_FONT_R : clampColorChannel(state.wordPopupFontR);
+    }
+
+    public int getWordPopupFontG() {
+        return state.wordPopupFontG == null ? DEFAULT_WORD_POPUP_FONT_G : clampColorChannel(state.wordPopupFontG);
+    }
+
+    public int getWordPopupFontB() {
+        return state.wordPopupFontB == null ? DEFAULT_WORD_POPUP_FONT_B : clampColorChannel(state.wordPopupFontB);
+    }
+
+    public @NotNull Color getWordPopupFontColor() {
+        return new Color(getWordPopupFontR(), getWordPopupFontG(), getWordPopupFontB());
+    }
+
+    public boolean isWordPopupShowMeaning() {
+        return state.wordPopupShowMeaning == null ? DEFAULT_WORD_POPUP_SHOW_MEANING : state.wordPopupShowMeaning;
+    }
+
+    public boolean isWordPopupShowSentence() {
+        return state.wordPopupShowSentence == null ? DEFAULT_WORD_POPUP_SHOW_SENTENCE : state.wordPopupShowSentence;
+    }
+
+    public boolean isWordPopupShowSynonyms() {
+        return state.wordPopupShowSynonyms == null ? DEFAULT_WORD_POPUP_SHOW_SYNONYMS : state.wordPopupShowSynonyms;
+    }
+
+    public int getWordPopupSentenceLimit() {
+        Integer value = state.wordPopupSentenceLimit;
+        if (value == null) {
+            return DEFAULT_WORD_POPUP_SENTENCE_LIMIT;
+        }
+        return clampWordPopupSentenceLimit(value);
+    }
+
+    public void setWordPopupStyle(int width, int height, int x, int y, int fontSize, int fontR, int fontG, int fontB) {
+        int normalizedWidth = clampWordPopupSize(width);
+        int normalizedHeight = clampWordPopupSize(height);
+        int normalizedX = clampWordPopupCoordinate(x);
+        int normalizedY = clampWordPopupCoordinate(y);
+        int normalizedFontSize = clampWordPopupFontSize(fontSize);
+        int normalizedFontR = clampColorChannel(fontR);
+        int normalizedFontG = clampColorChannel(fontG);
+        int normalizedFontB = clampColorChannel(fontB);
+        if (getWordPopupWidth() == normalizedWidth
+                && getWordPopupHeight() == normalizedHeight
+                && getWordPopupX() == normalizedX
+                && getWordPopupY() == normalizedY
+                && getWordPopupFontSize() == normalizedFontSize
+                && getWordPopupFontR() == normalizedFontR
+                && getWordPopupFontG() == normalizedFontG
+                && getWordPopupFontB() == normalizedFontB) {
+            return;
+        }
+        state.wordPopupWidth = normalizedWidth;
+        state.wordPopupHeight = normalizedHeight;
+        state.wordPopupX = normalizedX;
+        state.wordPopupY = normalizedY;
+        state.wordPopupFontSize = normalizedFontSize;
+        state.wordPopupFontR = normalizedFontR;
+        state.wordPopupFontG = normalizedFontG;
+        state.wordPopupFontB = normalizedFontB;
+        ApplicationManager.getApplication()
+                .getMessageBus()
+                .syncPublisher(PdfViewerSettingsListener.TOPIC)
+                .wordPopupStyleChanged(
+                        normalizedWidth,
+                        normalizedHeight,
+                        normalizedX,
+                        normalizedY,
+                        normalizedFontSize,
+                        new Color(normalizedFontR, normalizedFontG, normalizedFontB)
+                );
+    }
+
+    public int getWordPopupOpacityPercent() {
+        Integer value = state.wordPopupOpacityPercent;
+        if (value == null) {
+            return DEFAULT_POPUP_OPACITY_PERCENT;
+        }
+        return clampPopupOpacityPercent(value);
+    }
+
+    public void setWordPopupOpacityPercent(int percent) {
+        int normalized = clampPopupOpacityPercent(percent);
+        if (getWordPopupOpacityPercent() == normalized) {
+            return;
+        }
+        state.wordPopupOpacityPercent = normalized;
+        ApplicationManager.getApplication()
+                .getMessageBus()
+                .syncPublisher(PdfViewerSettingsListener.TOPIC)
+                .wordPopupOpacityChanged(normalized);
+    }
+
+    public void setWordPopupContentDisplay(boolean showMeaning, boolean showSentence, boolean showSynonyms, int sentenceLimit) {
+        int normalizedSentenceLimit = clampWordPopupSentenceLimit(sentenceLimit);
+        if (isWordPopupShowMeaning() == showMeaning
+                && isWordPopupShowSentence() == showSentence
+                && isWordPopupShowSynonyms() == showSynonyms
+                && getWordPopupSentenceLimit() == normalizedSentenceLimit) {
+            return;
+        }
+        state.wordPopupShowMeaning = showMeaning;
+        state.wordPopupShowSentence = showSentence;
+        state.wordPopupShowSynonyms = showSynonyms;
+        state.wordPopupSentenceLimit = normalizedSentenceLimit;
+        ApplicationManager.getApplication()
+                .getMessageBus()
+                .syncPublisher(PdfViewerSettingsListener.TOPIC)
+                .wordPopupContentDisplayChanged(showMeaning, showSentence, showSynonyms, normalizedSentenceLimit);
+    }
+
+    public boolean isWordSourceBuiltinEnabled() {
+        return state.wordSourceBuiltinEnabled == null || state.wordSourceBuiltinEnabled;
+    }
+
+    public @NotNull String getWordBuiltinVocabularyBook() {
+        String value = state.wordBuiltinVocabularyBook;
+        if (value == null) {
+            return DEFAULT_WORD_BUILTIN_BOOK;
+        }
+        String normalized = value.trim();
+        return normalized.isEmpty() ? DEFAULT_WORD_BUILTIN_BOOK : normalized;
+    }
+
+    public @NotNull List<CustomVocabularyBookData> getCustomVocabularyBooks() {
+        List<CustomVocabularyBookData> books = state.customVocabularyBooks;
+        if (books == null || books.isEmpty()) {
+            return List.of();
+        }
+        List<CustomVocabularyBookData> normalized = new ArrayList<>();
+        for (CustomVocabularyBookData book : books) {
+            if (book == null) {
+                continue;
+            }
+            String name = normalizeNullableText(book.name);
+            String jsonlPath = normalizeNullableText(book.jsonlPath);
+            if (name == null || jsonlPath == null) {
+                continue;
+            }
+            CustomVocabularyBookData copy = new CustomVocabularyBookData();
+            copy.name = name;
+            copy.jsonlPath = jsonlPath;
+            copy.createdAtEpochMillis = book.createdAtEpochMillis;
+            normalized.add(copy);
+        }
+        return normalized.isEmpty() ? List.of() : normalized;
+    }
+
+    public void setCustomVocabularyBooks(@NotNull List<CustomVocabularyBookData> books) {
+        List<CustomVocabularyBookData> normalized = normalizeCustomBooks(books);
+        if (getCustomVocabularyBooks().equals(normalized)) {
+            return;
+        }
+        state.customVocabularyBooks = normalized.isEmpty() ? null : normalized;
+        ApplicationManager.getApplication()
+                .getMessageBus()
+                .syncPublisher(PdfViewerSettingsListener.TOPIC)
+                .vocabularyBookListChanged();
+    }
+
+    public void addCustomVocabularyBook(@NotNull String name, @NotNull String jsonlPath) {
+        String normalizedName = normalizeNullableText(name);
+        String normalizedPath = normalizeNullableText(jsonlPath);
+        if (normalizedName == null || normalizedPath == null) {
+            return;
+        }
+        if (containsCustomBookName(getCustomVocabularyBooks(), normalizedName)) {
+            return;
+        }
+        List<CustomVocabularyBookData> next = new ArrayList<>(getCustomVocabularyBooks());
+        CustomVocabularyBookData book = new CustomVocabularyBookData();
+        book.name = normalizedName;
+        book.jsonlPath = normalizedPath;
+        book.createdAtEpochMillis = System.currentTimeMillis();
+        next.add(book);
+        setCustomVocabularyBooks(next);
+    }
+
+    public @NotNull String getSelectedVocabularyBookKey() {
+        String selected = normalizeNullableText(state.selectedVocabularyBookKey);
+        if (selected != null) {
+            return selected;
+        }
+        // 兼容历史字段：如果存在旧的内置选择，则映射到新key
+        return BUILTIN_KEY_PREFIX + getWordBuiltinVocabularyBook();
+    }
+
+    public void setSelectedVocabularyBookKey(@Nullable String key) {
+        String normalized = normalizeNullableText(key);
+        if (normalized == null) {
+            normalized = BUILTIN_KEY_PREFIX + getWordBuiltinVocabularyBook();
+        }
+        if (Objects.equals(getSelectedVocabularyBookKey(), normalized)) {
+            return;
+        }
+        state.selectedVocabularyBookKey = normalized;
+        WordLibraryLoader.reloadWordEntriesFromSettings(this);
+        ApplicationManager.getApplication()
+                .getMessageBus()
+                .syncPublisher(PdfViewerSettingsListener.TOPIC)
+                .selectedVocabularyBookChanged(normalized);
+    }
+
+    public void setWordBuiltinVocabularyBook(@Nullable String bookId) {
+        String normalized = bookId == null ? DEFAULT_WORD_BUILTIN_BOOK : bookId.trim();
+        if (normalized.isEmpty()) {
+            normalized = DEFAULT_WORD_BUILTIN_BOOK;
+        }
+        if (Objects.equals(getWordBuiltinVocabularyBook(), normalized)) {
+            return;
+        }
+        state.wordBuiltinVocabularyBook = normalized;
+        setSelectedVocabularyBookKey(BUILTIN_KEY_PREFIX + normalized);
+    }
+
+    public @Nullable String getWordSourceCustomPath() {
+        String value = state.wordSourceCustomPath;
+        if (value == null) {
+            return null;
+        }
+        String normalized = value.trim();
+        return normalized.isEmpty() ? null : normalized;
+    }
+
+    public void setWordSourceConfig(boolean builtinEnabled, @Nullable String customPath) {
+        String normalizedPath = customPath == null ? null : customPath.trim();
+        if (normalizedPath != null && normalizedPath.isEmpty()) {
+            normalizedPath = null;
+        }
+        if (isWordSourceBuiltinEnabled() == builtinEnabled && Objects.equals(getWordSourceCustomPath(), normalizedPath)) {
+            return;
+        }
+        state.wordSourceBuiltinEnabled = builtinEnabled;
+        state.wordSourceCustomPath = normalizedPath;
+        WordLibraryLoader.reloadWordEntriesFromSettings(this);
+        ApplicationManager.getApplication()
+                .getMessageBus()
+                .syncPublisher(PdfViewerSettingsListener.TOPIC)
+                .wordSourceChanged(builtinEnabled, normalizedPath);
+    }
+
+    public @NotNull List<String> getWordFilterDifficulties() {
+        return readNormalizedStringList(state.wordFilterDifficulties);
+    }
+
+    public @NotNull List<String> getWordFilterThemes() {
+        return readNormalizedStringList(state.wordFilterThemes);
+    }
+
+    public @NotNull List<String> getWordFilterSources() {
+        return readNormalizedStringList(state.wordFilterSources);
+    }
+
+    public void setWordCategoryFilters(@NotNull List<String> difficulties, @NotNull List<String> themes, @NotNull List<String> sources) {
+        List<String> normalizedDifficulties = normalizeStringList(difficulties);
+        List<String> normalizedThemes = normalizeStringList(themes);
+        List<String> normalizedSources = normalizeStringList(sources);
+        if (getWordFilterDifficulties().equals(normalizedDifficulties)
+                && getWordFilterThemes().equals(normalizedThemes)
+                && getWordFilterSources().equals(normalizedSources)) {
+            return;
+        }
+        state.wordFilterDifficulties = normalizedDifficulties;
+        state.wordFilterThemes = normalizedThemes;
+        state.wordFilterSources = normalizedSources;
+        ApplicationManager.getApplication()
+                .getMessageBus()
+                .syncPublisher(PdfViewerSettingsListener.TOPIC)
+                .wordCategoryFiltersChanged(normalizedDifficulties, normalizedThemes, normalizedSources);
+    }
+
+    public @NotNull List<WordEntryData> getWordEntries() {
+        List<WordEntryData> entries = state.wordEntries;
+        if (entries == null || entries.isEmpty()) {
+            return List.of();
+        }
+        return new ArrayList<>(entries);
+    }
+
+    public void setWordEntries(@NotNull List<WordEntryData> entries) {
+        List<WordEntryData> normalized = new ArrayList<>();
+        for (WordEntryData entry : entries) {
+            if (entry == null) {
+                continue;
+            }
+            String word = normalizeWordKey(entry.word);
+            if (word == null) {
+                continue;
+            }
+            WordEntryData copy = new WordEntryData();
+            copy.word = word;
+            copy.meaning = normalizeNullableText(entry.meaning);
+            copy.phonetic = normalizeNullableText(entry.phonetic);
+            copy.difficulty = normalizeNullableText(entry.difficulty);
+            copy.theme = normalizeNullableText(entry.theme);
+            copy.source = normalizeNullableText(entry.source);
+            copy.sourceRef = normalizeNullableText(entry.sourceRef);
+            copy.status = normalizeNullableText(entry.status);
+            copy.sentenceEnList = normalizeStringList(entry.sentenceEnList == null ? List.of() : entry.sentenceEnList);
+            copy.synonymsByPos = normalizeSynonymGroups(entry.synonymsByPos);
+            normalized.add(copy);
+        }
+        state.wordEntries = normalized.isEmpty() ? null : normalized;
+    }
+
+    public @NotNull Map<String, WordLearningStateData> getWordLearningStates() {
+        Map<String, WordLearningStateData> states = state.wordLearningStates;
+        if (states == null || states.isEmpty()) {
+            return Map.of();
+        }
+        return new LinkedHashMap<>(states);
+    }
+
+    public boolean isWordMastered(@Nullable String word) {
+        String key = normalizeWordKey(word);
+        if (key == null) {
+            return false;
+        }
+        Map<String, WordLearningStateData> states = state.wordLearningStates;
+        if (states == null) {
+            return false;
+        }
+        WordLearningStateData learningState = states.get(key);
+        return learningState != null && Boolean.TRUE.equals(learningState.mastered);
+    }
+
+    public void setWordMastered(@Nullable String word, boolean mastered) {
+        String key = normalizeWordKey(word);
+        if (key == null) {
+            return;
+        }
+        if (isWordMastered(key) == mastered) {
+            return;
+        }
+        if (state.wordLearningStates == null) {
+            state.wordLearningStates = new LinkedHashMap<>();
+        }
+        WordLearningStateData learningState = state.wordLearningStates.computeIfAbsent(key, unused -> new WordLearningStateData());
+        learningState.mastered = mastered;
+        long now = System.currentTimeMillis();
+        learningState.lastReviewedAtEpochMillis = now;
+        int previousCount = learningState.reviewCount == null ? 0 : Math.max(0, learningState.reviewCount);
+        learningState.reviewCount = previousCount + 1;
+        WordLibraryLoader.reloadWordEntriesFromSettings(this);
+        ApplicationManager.getApplication()
+                .getMessageBus()
+                .syncPublisher(PdfViewerSettingsListener.TOPIC)
+                .wordSourceChanged(isWordSourceBuiltinEnabled(), getWordSourceCustomPath());
+    }
+
+    public boolean toggleWordMastered(@Nullable String word) {
+        boolean next = !isWordMastered(word);
+        setWordMastered(word, next);
+        return next;
+    }
+
     public int getPdfReadPosition(@Nullable String pdfPath) {
         String key = normalizePdfPathKey(pdfPath);
         if (key == null) {
@@ -539,12 +1034,128 @@ public final class PdfViewerSettings implements PersistentStateComponent<PdfView
         return trimmed.isEmpty() ? null : trimmed;
     }
 
+    private static @Nullable String normalizeWordKey(@Nullable String word) {
+        if (word == null) {
+            return null;
+        }
+        String normalized = word.trim();
+        if (normalized.isEmpty()) {
+            return null;
+        }
+        return normalized.toLowerCase(Locale.ROOT);
+    }
+
+    private static @Nullable String normalizeNullableText(@Nullable String value) {
+        if (value == null) {
+            return null;
+        }
+        String normalized = value.trim();
+        return normalized.isEmpty() ? null : normalized;
+    }
+
+    private static @NotNull List<String> normalizeStringList(@NotNull List<String> values) {
+        LinkedHashMap<String, Boolean> unique = new LinkedHashMap<>();
+        for (String value : values) {
+            String normalized = normalizeNullableText(value);
+            if (normalized != null) {
+                unique.put(normalized, Boolean.TRUE);
+            }
+        }
+        return new ArrayList<>(unique.keySet());
+    }
+
+    private static @NotNull List<String> readNormalizedStringList(@Nullable List<String> values) {
+        if (values == null || values.isEmpty()) {
+            return List.of();
+        }
+        return normalizeStringList(values);
+    }
+
+    private static @NotNull List<WordSynonymGroupData> normalizeSynonymGroups(@Nullable List<WordSynonymGroupData> groups) {
+        if (groups == null || groups.isEmpty()) {
+            return List.of();
+        }
+        List<WordSynonymGroupData> normalized = new ArrayList<>();
+        for (WordSynonymGroupData group : groups) {
+            if (group == null) {
+                continue;
+            }
+            String pos = normalizeNullableText(group.pos);
+            List<String> words = normalizeStringList(group.words == null ? List.of() : group.words);
+            if (pos == null || words.isEmpty()) {
+                continue;
+            }
+            WordSynonymGroupData copy = new WordSynonymGroupData();
+            copy.pos = pos;
+            copy.words = words;
+            normalized.add(copy);
+        }
+        return normalized.isEmpty() ? List.of() : normalized;
+    }
+
+    private static @NotNull List<CustomVocabularyBookData> normalizeCustomBooks(@NotNull List<CustomVocabularyBookData> books) {
+        LinkedHashMap<String, CustomVocabularyBookData> unique = new LinkedHashMap<>();
+        for (CustomVocabularyBookData book : books) {
+            if (book == null) {
+                continue;
+            }
+            String name = normalizeNullableText(book.name);
+            String path = normalizeNullableText(book.jsonlPath);
+            if (name == null || path == null) {
+                continue;
+            }
+            if (containsCustomBookName(unique.values(), name)) {
+                continue;
+            }
+            CustomVocabularyBookData copy = new CustomVocabularyBookData();
+            copy.name = name;
+            copy.jsonlPath = path;
+            copy.createdAtEpochMillis = book.createdAtEpochMillis;
+            unique.put(name, copy);
+        }
+        return unique.isEmpty() ? List.of() : new ArrayList<>(unique.values());
+    }
+
+    private static boolean containsCustomBookName(@NotNull Iterable<CustomVocabularyBookData> books, @NotNull String name) {
+        String target = name.trim().toLowerCase(Locale.ROOT);
+        for (CustomVocabularyBookData existing : books) {
+            if (existing == null || existing.name == null) {
+                continue;
+            }
+            String current = existing.name.trim().toLowerCase(Locale.ROOT);
+            if (current.equals(target)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private static int clampPanePercent(int value) {
         return Math.max(5, Math.min(90, value));
     }
 
     private static int clampPopupSize(int value) {
         return Math.max(1, Math.min(2000, value));
+    }
+
+    private static int clampWordPopupSize(int value) {
+        return Math.max(120, Math.min(2000, value));
+    }
+
+    private static int clampWordPopupCoordinate(int value) {
+        return Math.max(-5000, Math.min(5000, value));
+    }
+
+    private static int clampWordPopupFontSize(int value) {
+        return Math.max(8, Math.min(72, value));
+    }
+
+    private static int clampWordPopupSentenceLimit(int value) {
+        return Math.max(1, Math.min(5, value));
+    }
+
+    private static int clampPopupOpacityPercent(int value) {
+        return Math.max(MIN_POPUP_OPACITY_PERCENT, Math.min(MAX_POPUP_OPACITY_PERCENT, value));
     }
 
     private static int[] normalizePaneRatios(int leftPercent, int middlePercent, int rightPercent) {

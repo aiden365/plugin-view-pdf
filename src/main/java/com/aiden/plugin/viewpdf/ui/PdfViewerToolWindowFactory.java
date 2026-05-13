@@ -137,6 +137,18 @@ public final class PdfViewerToolWindowFactory implements ToolWindowFactory, Dumb
                     public void renderBatchPageCountChanged(int pageCount) {
                         splitPanel.getPdfPanel().setRenderBatchPageCount(pageCount);
                     }
+
+                    @Override
+                    public void wordPopupStyleChanged(int width, int height, int x, int y, int fontSize, @NotNull java.awt.Color fontColor) {
+                    }
+
+                    @Override
+                    public void wordSourceChanged(boolean builtinEnabled, String customPath) {
+                    }
+
+                    @Override
+                    public void wordCategoryFiltersChanged(@NotNull List<String> difficulties, @NotNull List<String> themes, @NotNull List<String> sources) {
+                    }
                 });
 
         toolWindow.setTitleActions(List.of(

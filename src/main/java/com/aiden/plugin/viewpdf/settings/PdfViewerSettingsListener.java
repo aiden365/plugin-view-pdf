@@ -5,6 +5,7 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.awt.Color;
+import java.util.List;
 
 public interface PdfViewerSettingsListener {
     Topic<PdfViewerSettingsListener> TOPIC =
@@ -41,4 +42,25 @@ public interface PdfViewerSettingsListener {
     void editorPopupPdfTextColorChanged(@NotNull Color newTextColor);
 
     void renderBatchPageCountChanged(int pageCount);
+
+    void wordPopupStyleChanged(int width, int height, int x, int y, int fontSize, @NotNull Color fontColor);
+
+    default void wordPopupContentDisplayChanged(boolean showMeaning, boolean showSentence, boolean showSynonyms, int sentenceLimit) {
+    }
+
+    default void vocabularyBookListChanged() {
+    }
+
+    default void selectedVocabularyBookChanged(@NotNull String key) {
+    }
+
+    default void editorPopupOpacityChanged(int percent) {
+    }
+
+    default void wordPopupOpacityChanged(int percent) {
+    }
+
+    void wordSourceChanged(boolean builtinEnabled, @Nullable String customPath);
+
+    void wordCategoryFiltersChanged(@NotNull List<String> difficulties, @NotNull List<String> themes, @NotNull List<String> sources);
 }
