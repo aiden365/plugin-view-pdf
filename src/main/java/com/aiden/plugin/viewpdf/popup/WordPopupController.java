@@ -12,6 +12,7 @@ import com.intellij.openapi.ui.popup.JBPopupFactory;
 import com.intellij.openapi.ui.popup.JBPopupListener;
 import com.intellij.openapi.ui.popup.LightweightWindowEvent;
 import com.intellij.openapi.util.Disposer;
+import com.intellij.icons.AllIcons;
 import com.intellij.ui.awt.RelativePoint;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -24,10 +25,13 @@ import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JPopupMenu;
 import javax.swing.JMenuItem;
+import javax.swing.OverlayLayout;
 import javax.swing.SwingConstants;
 import javax.swing.SwingUtilities;
+import javax.swing.Timer;
 import java.awt.Color;
 import java.awt.Component;
+import java.awt.Cursor;
 import java.awt.Dimension;
 import java.awt.Font;
 import java.awt.Point;
@@ -46,13 +50,17 @@ public final class WordPopupController implements Disposable {
     private static final Color POPUP_BORDER_COLOR = new Color(70, 70, 70);
 
     private final Project project;
+    private final JPanel rootPanel;
     private final JPanel contentPanel;
+    private final JPanel navOverlayPanel;
     private final JLabel wordLabel;
     private final JLabel phoneticLabel;
     private final JLabel meaningLabel;
     private final JLabel sentenceLabel;
     private final JLabel synonymsLabel;
     private final JLabel hintLabel;
+    private final JLabel leftArrowLabel;
+    private final JLabel rightArrowLabel;
 
     private JBPopup popup;
     private Editor lastEditor;
@@ -62,6 +70,13 @@ public final class WordPopupController implements Disposable {
     private ComponentAdapter trackedWindowListener;
     private Point dragAnchorOnScreen;
     private Point dragWindowStartOnScreen;
+    private boolean adjustingBounds;
+    private boolean hasPendingBoundsPersist;
+    private int pendingWidth;
+    private int pendingHeight;
+    private int pendingX;
+    private int pendingY;
+    private Timer boundsPersistTimer;
 
     public static @NotNull WordPopupController getOrCreate(@NotNull Project project) {
         WordPopupController existing = project.getUserData(PdfViewerKeys.WORD_POPUP_CONTROLLER_KEY);
@@ -76,14 +91,15 @@ public final class WordPopupController implements Disposable {
 
     private WordPopupController(@NotNull Project project) {
         this.project = project;
+        this.rootPanel = new JPanel();
+        this.rootPanel.setLayout(new OverlayLayout(rootPanel));
+        this.rootPanel.setOpaque(true);
+        this.rootPanel.setBackground(POPUP_BACKGROUND);
+        this.rootPanel.setBorder(BorderFactory.createEmptyBorder(3, 3, 3, 3));
         this.contentPanel = new JPanel();
         this.contentPanel.setLayout(new BoxLayout(contentPanel, BoxLayout.Y_AXIS));
-        this.contentPanel.setOpaque(true);
-        this.contentPanel.setBackground(POPUP_BACKGROUND);
-        this.contentPanel.setBorder(BorderFactory.createCompoundBorder(
-                BorderFactory.createLineBorder(POPUP_BORDER_COLOR, 1),
-                BorderFactory.createEmptyBorder(12, 12, 12, 12)
-        ));
+        this.contentPanel.setOpaque(false);
+        this.contentPanel.setBorder(BorderFactory.createEmptyBorder());
 
         this.wordLabel = new JLabel("", SwingConstants.LEFT);
         this.phoneticLabel = new JLabel("", SwingConstants.LEFT);
@@ -91,12 +107,41 @@ public final class WordPopupController implements Disposable {
         this.sentenceLabel = new JLabel("", SwingConstants.LEFT);
         this.synonymsLabel = new JLabel("", SwingConstants.LEFT);
         this.hintLabel = new JLabel("", SwingConstants.LEFT);
+        this.leftArrowLabel = new JLabel(AllIcons.Actions.Back, SwingConstants.CENTER);
+        this.rightArrowLabel = new JLabel(AllIcons.Actions.Forward, SwingConstants.CENTER);
+
+        this.navOverlayPanel = new JPanel(null) {
+            @Override
+            public boolean contains(int x, int y) {
+                if (leftArrowLabel.isVisible()) {
+                    Point p = SwingUtilities.convertPoint(this, x, y, leftArrowLabel);
+                    if (leftArrowLabel.contains(p)) {
+                        return true;
+                    }
+                }
+                if (rightArrowLabel.isVisible()) {
+                    Point p = SwingUtilities.convertPoint(this, x, y, rightArrowLabel);
+                    if (rightArrowLabel.contains(p)) {
+                        return true;
+                    }
+                }
+                return false;
+            }
+        };
+        this.navOverlayPanel.setOpaque(false);
         this.wordLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
         this.phoneticLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
         this.meaningLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
         this.sentenceLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
         this.synonymsLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
         this.hintLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
+
+        this.leftArrowLabel.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        this.rightArrowLabel.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        this.leftArrowLabel.setOpaque(false);
+        this.rightArrowLabel.setOpaque(false);
+        this.leftArrowLabel.setVisible(false);
+        this.rightArrowLabel.setVisible(false);
 
         this.contentPanel.add(wordLabel);
         this.contentPanel.add(Box.createVerticalStrut(8));
@@ -108,8 +153,13 @@ public final class WordPopupController implements Disposable {
         this.contentPanel.add(Box.createVerticalStrut(8));
         this.contentPanel.add(synonymsLabel);
         this.contentPanel.add(Box.createVerticalGlue());
-        this.contentPanel.add(Box.createVerticalStrut(10));
-        this.contentPanel.add(hintLabel);
+
+        navOverlayPanel.add(leftArrowLabel);
+        navOverlayPanel.add(rightArrowLabel);
+
+        rootPanel.add(contentPanel);
+        rootPanel.add(navOverlayPanel);
+
         this.contentPanel.addMouseListener(new MouseAdapter() {
             @Override
             public void mousePressed(MouseEvent e) {
@@ -154,16 +204,56 @@ public final class WordPopupController implements Disposable {
                 int x = dragWindowStartOnScreen.x + dx;
                 int y = dragWindowStartOnScreen.y + dy;
                 window.setLocation(x, y);
-                persistWindowBounds(window);
             }
 
             @Override
             public void mouseReleased(MouseEvent e) {
+                Window window = SwingUtilities.getWindowAncestor(contentPanel);
+                if (window != null && dragAnchorOnScreen != null && dragWindowStartOnScreen != null) {
+                    scheduleBoundsPersist(window);
+                }
                 dragAnchorOnScreen = null;
                 dragWindowStartOnScreen = null;
             }
         };
         installCtrlDragListeners(ctrlDragListener);
+
+        MouseAdapter hoverListener = new MouseAdapter() {
+            @Override
+            public void mouseEntered(MouseEvent e) {
+                setNavigationVisible(true);
+            }
+
+            @Override
+            public void mouseExited(MouseEvent e) {
+                Point local = new Point(e.getLocationOnScreen());
+                SwingUtilities.convertPointFromScreen(local, rootPanel);
+                if (rootPanel.contains(local)) {
+                    return;
+                }
+                setNavigationVisible(false);
+            }
+        };
+        installHoverListeners(hoverListener);
+
+        leftArrowLabel.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mousePressed(MouseEvent e) {
+                if (!SwingUtilities.isLeftMouseButton(e)) {
+                    return;
+                }
+                showPreviousWord();
+            }
+        });
+        rightArrowLabel.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mousePressed(MouseEvent e) {
+                if (!SwingUtilities.isLeftMouseButton(e)) {
+                    return;
+                }
+                showNextWord();
+            }
+        });
 
         refreshWordPool(true);
         refreshContent();
@@ -239,6 +329,9 @@ public final class WordPopupController implements Disposable {
 
                     @Override
                     public void wordPopupStyleChanged(int width, int height, int x, int y, int fontSize, @NotNull Color fontColor) {
+                        if (dragAnchorOnScreen != null || adjustingBounds) {
+                            return;
+                        }
                         PdfViewerSettings settings = PdfViewerSettings.getInstance();
                         applyStyle(settings);
                         if (isPopupActive()) {
@@ -267,6 +360,15 @@ public final class WordPopupController implements Disposable {
                         refreshWordPool(true);
                         refreshContent();
                     }
+
+                    @Override
+                    public void wordHiddenStateChanged(@NotNull String bookKey) {
+                        if (!Objects.equals(PdfViewerSettings.getInstance().getSelectedVocabularyBookKey(), bookKey)) {
+                            return;
+                        }
+                        refreshWordPool(true);
+                        refreshContent();
+                    }
                 });
     }
 
@@ -289,7 +391,7 @@ public final class WordPopupController implements Disposable {
         }
 
         popup = JBPopupFactory.getInstance()
-                .createComponentPopupBuilder(contentPanel, (JComponent) contentPanel)
+                .createComponentPopupBuilder(rootPanel, (JComponent) rootPanel)
                 .setProject(project)
                 .setMovable(false)
                 .setResizable(true)
@@ -304,6 +406,7 @@ public final class WordPopupController implements Disposable {
         popup.addListener(new JBPopupListener() {
             @Override
             public void onClosed(@NotNull LightweightWindowEvent event) {
+                flushPendingBoundsPersistNow();
                 detachWindowTracking();
                 popup = null;
             }
@@ -317,6 +420,7 @@ public final class WordPopupController implements Disposable {
     }
 
     public void hide() {
+        flushPendingBoundsPersistNow();
         JBPopup current = popup;
         if (current != null && !current.isDisposed()) {
             current.cancel();
@@ -348,6 +452,21 @@ public final class WordPopupController implements Disposable {
         refreshContent();
     }
 
+    public void showPreviousWord() {
+        refreshWordPool(false);
+        if (activeWords.isEmpty()) {
+            refreshContent();
+            return;
+        }
+        int fromIndex = currentIndex < 0 ? 0 : currentIndex;
+        int prev = findPreviousIndexSkippingMastered(fromIndex);
+        if (prev < 0) {
+            prev = (fromIndex - 1 + activeWords.size()) % activeWords.size();
+        }
+        currentIndex = prev;
+        refreshContent();
+    }
+
     public void markCurrentWordMasteredAndAdvance() {
         refreshWordPool(false);
         PdfViewerSettings.WordEntryData current = getCurrentEntry();
@@ -367,11 +486,15 @@ public final class WordPopupController implements Disposable {
 
     private void refreshWordPool(boolean keepCurrentWord) {
         PdfViewerSettings settings = PdfViewerSettings.getInstance();
+        String bookKey = settings.getSelectedVocabularyBookKey();
         List<PdfViewerSettings.WordEntryData> source = settings.getWordEntries();
         List<PdfViewerSettings.WordEntryData> filtered = new ArrayList<>(source.size());
 
         for (PdfViewerSettings.WordEntryData entry : source) {
             if (entry == null || entry.word == null || entry.word.isBlank()) {
+                continue;
+            }
+            if (settings.isWordHiddenInPopup(bookKey, entry.word)) {
                 continue;
             }
             filtered.add(entry);
@@ -412,10 +535,9 @@ public final class WordPopupController implements Disposable {
             return;
         }
 
-        boolean mastered = settings.isWordMastered(current.word);
         String phonetic = current.phonetic == null ? "" : current.phonetic.trim();
         String meaning = current.meaning == null || current.meaning.isBlank() ? "(暂无释义)" : current.meaning.trim();
-        wordLabel.setText(current.word + (mastered ? "  [已学会]" : ""));
+        wordLabel.setText(current.word);
         phoneticLabel.setText(phonetic.isEmpty() ? "" : "/" + phonetic + "/");
         phoneticLabel.setVisible(false);
 
@@ -442,9 +564,10 @@ public final class WordPopupController implements Disposable {
         int fontSize = settings.getWordPopupFontSize();
         Color fontColor = settings.getWordPopupFontColor();
 
-        contentPanel.setPreferredSize(new Dimension(width, height));
-        contentPanel.setMinimumSize(new Dimension(width, height));
-        contentPanel.setMaximumSize(new Dimension(width, height));
+        Dimension size = new Dimension(width, height);
+        rootPanel.setPreferredSize(size);
+        contentPanel.setPreferredSize(size);
+        navOverlayPanel.setPreferredSize(size);
 
         Font base = wordLabel.getFont();
         Font wordFont = base.deriveFont(Font.BOLD, Math.max(10, fontSize + 2));
@@ -465,6 +588,9 @@ public final class WordPopupController implements Disposable {
 
         contentPanel.revalidate();
         contentPanel.repaint();
+        if (leftArrowLabel.isVisible() || rightArrowLabel.isVisible()) {
+            layoutNavigationArrows();
+        }
     }
 
     private void relocatePopup(@NotNull PdfViewerSettings settings) {
@@ -479,8 +605,13 @@ public final class WordPopupController implements Disposable {
         Point local = resolvePopupLocation(editor, settings);
         Point screen = new Point(local);
         SwingUtilities.convertPointToScreen(screen, editor.getContentComponent());
-        window.setLocation(screen);
-        window.setSize(settings.getWordPopupWidth(), settings.getWordPopupHeight());
+        if (!screen.equals(window.getLocation())) {
+            window.setLocation(screen);
+        }
+        Dimension desiredSize = new Dimension(settings.getWordPopupWidth(), settings.getWordPopupHeight());
+        if (!desiredSize.equals(window.getSize())) {
+            window.setSize(desiredSize);
+        }
     }
 
     private @NotNull Point resolvePopupLocation(@NotNull Editor editor, @NotNull PdfViewerSettings settings) {
@@ -495,6 +626,22 @@ public final class WordPopupController implements Disposable {
         int size = activeWords.size();
         for (int i = 1; i <= size; i++) {
             int candidate = (fromIndex + i + size) % size;
+            PdfViewerSettings.WordEntryData entry = activeWords.get(candidate);
+            if (!settings.isWordMastered(entry.word)) {
+                return candidate;
+            }
+        }
+        return -1;
+    }
+
+    private int findPreviousIndexSkippingMastered(int fromIndex) {
+        if (activeWords.isEmpty()) {
+            return -1;
+        }
+        PdfViewerSettings settings = PdfViewerSettings.getInstance();
+        int size = activeWords.size();
+        for (int i = 1; i <= size; i++) {
+            int candidate = (fromIndex - i + size) % size;
             PdfViewerSettings.WordEntryData entry = activeWords.get(candidate);
             if (!settings.isWordMastered(entry.word)) {
                 return candidate;
@@ -618,9 +765,41 @@ public final class WordPopupController implements Disposable {
         return popup != null && !popup.isDisposed();
     }
 
+    private void layoutNavigationArrows() {
+        int width = rootPanel.getWidth();
+        int height = rootPanel.getHeight();
+        if (width <= 0 || height <= 0) {
+            return;
+        }
+        navOverlayPanel.setBounds(0, 0, width, height);
+        Dimension prevSize = leftArrowLabel.getPreferredSize();
+        Dimension nextSize = rightArrowLabel.getPreferredSize();
+        int gap = 4;
+        int stackHeight = prevSize.height + gap + nextSize.height;
+        int startY = (height - stackHeight) / 2;
+        int maxWidth = Math.max(prevSize.width, nextSize.width);
+        int x = Math.max(2, width - 2 - maxWidth);
+        leftArrowLabel.setBounds(x, startY, maxWidth, prevSize.height);
+        rightArrowLabel.setBounds(x, startY + prevSize.height + gap, maxWidth, nextSize.height);
+    }
+
+    private void setNavigationVisible(boolean visible) {
+        boolean effective = visible && isPopupActive() && getCurrentEntry() != null;
+        leftArrowLabel.setVisible(effective);
+        rightArrowLabel.setVisible(effective);
+        if (effective) {
+            layoutNavigationArrows();
+        }
+        navOverlayPanel.repaint();
+    }
+
     private void installCtrlDragListeners(@NotNull MouseAdapter listener) {
+        rootPanel.addMouseListener(listener);
+        rootPanel.addMouseMotionListener(listener);
         contentPanel.addMouseListener(listener);
         contentPanel.addMouseMotionListener(listener);
+        navOverlayPanel.addMouseListener(listener);
+        navOverlayPanel.addMouseMotionListener(listener);
         wordLabel.addMouseListener(listener);
         wordLabel.addMouseMotionListener(listener);
         phoneticLabel.addMouseListener(listener);
@@ -633,6 +812,24 @@ public final class WordPopupController implements Disposable {
         synonymsLabel.addMouseMotionListener(listener);
         hintLabel.addMouseListener(listener);
         hintLabel.addMouseMotionListener(listener);
+        leftArrowLabel.addMouseListener(listener);
+        leftArrowLabel.addMouseMotionListener(listener);
+        rightArrowLabel.addMouseListener(listener);
+        rightArrowLabel.addMouseMotionListener(listener);
+    }
+
+    private void installHoverListeners(@NotNull MouseAdapter listener) {
+        rootPanel.addMouseListener(listener);
+        contentPanel.addMouseListener(listener);
+        navOverlayPanel.addMouseListener(listener);
+        wordLabel.addMouseListener(listener);
+        phoneticLabel.addMouseListener(listener);
+        meaningLabel.addMouseListener(listener);
+        sentenceLabel.addMouseListener(listener);
+        synonymsLabel.addMouseListener(listener);
+        hintLabel.addMouseListener(listener);
+        leftArrowLabel.addMouseListener(listener);
+        rightArrowLabel.addMouseListener(listener);
     }
 
     private void attachWindowTracking() {
@@ -645,15 +842,63 @@ public final class WordPopupController implements Disposable {
         trackedWindowListener = new ComponentAdapter() {
             @Override
             public void componentMoved(ComponentEvent e) {
-                persistWindowBounds(window);
+                scheduleBoundsPersist(window);
             }
 
             @Override
             public void componentResized(ComponentEvent e) {
-                persistWindowBounds(window);
+                scheduleBoundsPersist(window);
             }
         };
         window.addComponentListener(trackedWindowListener);
+    }
+
+    private void scheduleBoundsPersist(@NotNull Window window) {
+        Editor editor = lastEditor;
+        if (editor == null) {
+            return;
+        }
+        Point local = window.getLocationOnScreen();
+        SwingUtilities.convertPointFromScreen(local, editor.getContentComponent());
+        pendingWidth = window.getWidth();
+        pendingHeight = window.getHeight();
+        pendingX = local.x;
+        pendingY = local.y;
+        hasPendingBoundsPersist = true;
+        adjustingBounds = true;
+        if (boundsPersistTimer == null) {
+            boundsPersistTimer = new Timer(150, e -> flushPendingBoundsPersist());
+            boundsPersistTimer.setRepeats(false);
+        }
+        boundsPersistTimer.restart();
+    }
+
+    private void flushPendingBoundsPersist() {
+        if (!hasPendingBoundsPersist) {
+            adjustingBounds = false;
+            return;
+        }
+        PdfViewerSettings settings = PdfViewerSettings.getInstance();
+        Color color = settings.getWordPopupFontColor();
+        settings.setWordPopupStyle(
+                pendingWidth,
+                pendingHeight,
+                pendingX,
+                pendingY,
+                settings.getWordPopupFontSize(),
+                color.getRed(),
+                color.getGreen(),
+                color.getBlue()
+        );
+        hasPendingBoundsPersist = false;
+        adjustingBounds = false;
+    }
+
+    private void flushPendingBoundsPersistNow() {
+        if (boundsPersistTimer != null) {
+            boundsPersistTimer.stop();
+        }
+        flushPendingBoundsPersist();
     }
 
     private void applyWindowOpacity(int percent) {
@@ -707,6 +952,9 @@ public final class WordPopupController implements Disposable {
     public void dispose() {
         hide();
         detachWindowTracking();
+        if (boundsPersistTimer != null) {
+            boundsPersistTimer.stop();
+        }
         lastEditor = null;
         activeWords = List.of();
         currentIndex = -1;

@@ -31,6 +31,7 @@ public final class StealthSplitPanel implements Disposable {
 
     private final JSplitPane outerSplitPane;
     private final JSplitPane rightSplitPane;
+    private final JSplitPane rightMostSplitPane;
     private final JPanel rightCards;
     private final CardLayout cardLayout;
 
@@ -39,6 +40,7 @@ public final class StealthSplitPanel implements Disposable {
     private final DisguisePanel disguisePanel;
     private final DisguisePanel fixedCodePanel;
     private final PdfViewerPanel pdfViewerPanel;
+    private final WordManagerPanel wordManagerPanel;
 
     private Color pdfBackgroundColor = new Color(43, 45, 48);
     private boolean pdfToggleEnabled;
@@ -51,6 +53,8 @@ public final class StealthSplitPanel implements Disposable {
     private Runnable onDisguiseShownCallback;
     private boolean applyingPaneRatios;
     private boolean thirdPaneVisible = true;
+    private boolean wordManagerPaneVisible;
+    private boolean applyingWordManagerPaneWidth;
 
     public StealthSplitPanel(@NotNull Project project) {
         settings = PdfViewerSettings.getInstance();
@@ -76,7 +80,17 @@ public final class StealthSplitPanel implements Disposable {
         rightSplitPane.setMinimumSize(new Dimension(200, 200));
         installFlatDividerUi(rightSplitPane);
 
-        outerSplitPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, projectTreePanel.getComponent(), rightSplitPane);
+        wordManagerPanel = new WordManagerPanel();
+        rightMostSplitPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, rightSplitPane, wordManagerPanel.getComponent());
+        rightMostSplitPane.setResizeWeight(0.8);
+        rightMostSplitPane.setDividerSize(0);
+        rightMostSplitPane.setBorder(BorderFactory.createEmptyBorder());
+        rightMostSplitPane.setMinimumSize(new Dimension(200, 200));
+        installFlatDividerUi(rightMostSplitPane);
+        wordManagerPanel.getComponent().setVisible(false);
+        wordManagerPaneVisible = false;
+
+        outerSplitPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, projectTreePanel.getComponent(), rightMostSplitPane);
         outerSplitPane.setResizeWeight(0.25);
         outerSplitPane.setDividerSize(2);
         outerSplitPane.setBorder(BorderFactory.createEmptyBorder());
@@ -140,6 +154,7 @@ public final class StealthSplitPanel implements Disposable {
         };
         pdfViewerPanel.setRegionMouseListener(pdfExitListener);
         installPaneRatioPersistence();
+        installWordManagerPanePersistence();
         showDisguise();
     }
 
@@ -279,6 +294,44 @@ public final class StealthSplitPanel implements Disposable {
         });
     }
 
+    public boolean isWordManagerPaneVisible() {
+        return wordManagerPaneVisible;
+    }
+
+    public void setWordManagerPaneVisible(boolean visible) {
+        wordManagerPaneVisible = visible;
+        SwingUtilities.invokeLater(() -> {
+            if (visible) {
+                wordManagerPanel.getComponent().setVisible(true);
+                rightMostSplitPane.setEnabled(true);
+                rightMostSplitPane.setDividerSize(2);
+                setWordManagerPaneWidthPercent(settings.getWordManagerPaneWidthPercent());
+            } else {
+                wordManagerPanel.getComponent().setVisible(false);
+                rightMostSplitPane.setDividerSize(0);
+                rightMostSplitPane.setEnabled(false);
+                rightMostSplitPane.setDividerLocation(1.0);
+            }
+            rightMostSplitPane.revalidate();
+            rightMostSplitPane.repaint();
+        });
+    }
+
+    public void setWordManagerPaneWidthPercent(int percent) {
+        if (!wordManagerPaneVisible) {
+            return;
+        }
+        applyingWordManagerPaneWidth = true;
+        SwingUtilities.invokeLater(() -> {
+            try {
+                int p = Math.max(10, Math.min(60, percent));
+                rightMostSplitPane.setDividerLocation(1.0 - (p / 100.0));
+            } finally {
+                applyingWordManagerPaneWidth = false;
+            }
+        });
+    }
+
     public void showPdf() {
         applyPdfBackground();
         pointerInsidePdfSinceShown = false;
@@ -312,11 +365,38 @@ public final class StealthSplitPanel implements Disposable {
             if (applyingPaneRatios) {
                 return;
             }
+            if (wordManagerPaneVisible) {
+                return;
+            }
             int[] ratios = captureCurrentPaneRatios();
             settings.setPaneRatios(ratios[0], ratios[1], ratios[2]);
         };
         outerSplitPane.addPropertyChangeListener(JSplitPane.DIVIDER_LOCATION_PROPERTY, listener);
         rightSplitPane.addPropertyChangeListener(JSplitPane.DIVIDER_LOCATION_PROPERTY, listener);
+    }
+
+    private void installWordManagerPanePersistence() {
+        PropertyChangeListener listener = evt -> {
+            if (!wordManagerPaneVisible) {
+                return;
+            }
+            if (applyingWordManagerPaneWidth) {
+                return;
+            }
+            int percent = captureWordManagerWidthPercent();
+            settings.setWordManagerPaneWidthPercent(percent);
+        };
+        rightMostSplitPane.addPropertyChangeListener(JSplitPane.DIVIDER_LOCATION_PROPERTY, listener);
+    }
+
+    private int captureWordManagerWidthPercent() {
+        int total = rightMostSplitPane.getWidth();
+        int right = wordManagerPanel.getComponent().getWidth();
+        if (total <= 0 || right <= 0) {
+            return settings.getWordManagerPaneWidthPercent();
+        }
+        int percent = (int) Math.round(right * 100.0 / total);
+        return Math.max(10, Math.min(60, percent));
     }
 
     private static int @NotNull [] normalizeRatios(int leftPercent, int middlePercent, int rightPercent) {
@@ -431,5 +511,6 @@ public final class StealthSplitPanel implements Disposable {
         fixedCodePanel.dispose();
         projectTreePanel.dispose();
         pdfViewerPanel.dispose();
+        wordManagerPanel.dispose();
     }
 }

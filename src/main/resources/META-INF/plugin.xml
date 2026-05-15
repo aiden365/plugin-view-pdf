@@ -90,7 +90,14 @@
                 class="com.aiden.plugin.viewpdf.actions.NextWordAction"
                 text="下一个单词"
                 description="切换到下一个待学习单词">
-            <keyboard-shortcut keymap="$default" first-keystroke="ctrl alt N"/>
+            <add-to-group group-id="ToolsMenu" anchor="last"/>
+        </action>
+
+        <action
+                id="com.aiden.plugin.viewpdf.actions.PrevWord"
+                class="com.aiden.plugin.viewpdf.actions.PrevWordAction"
+                text="上一个单词"
+                description="切换到上一个待学习单词">
             <add-to-group group-id="ToolsMenu" anchor="last"/>
         </action>
 

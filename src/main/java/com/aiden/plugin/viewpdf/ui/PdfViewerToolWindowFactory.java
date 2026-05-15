@@ -39,6 +39,7 @@ public final class PdfViewerToolWindowFactory implements ToolWindowFactory, Dumb
                 settings.getPaneRightPercent()
         );
         splitPanel.setThirdPaneVisible(settings.isThirdPaneVisible());
+        splitPanel.setWordManagerPaneVisible(false);
         splitPanel.setHoverSeconds(settings.getAutoShowPdfHoverSeconds());
         splitPanel.getPdfPanel().setZoomPercent(settings.getPdfZoomPercent());
         splitPanel.getPdfPanel().setTextColor(settings.getPdfTextColor());
@@ -118,6 +119,16 @@ public final class PdfViewerToolWindowFactory implements ToolWindowFactory, Dumb
                     }
 
                     @Override
+                    public void wordManagerPaneVisibilityChanged(boolean visible) {
+                        splitPanel.setWordManagerPaneVisible(visible);
+                    }
+
+                    @Override
+                    public void wordManagerPaneWidthPercentChanged(int percent) {
+                        splitPanel.setWordManagerPaneWidthPercent(percent);
+                    }
+
+                    @Override
                     public void editorPopupSizeChanged(int width, int height) {
                     }
 
@@ -151,8 +162,10 @@ public final class PdfViewerToolWindowFactory implements ToolWindowFactory, Dumb
                     }
                 });
 
+        splitPanel.setWordManagerPaneVisible(settings.isWordManagerPaneVisible());
         toolWindow.setTitleActions(List.of(
                 new ToggleThirdPaneAction(splitPanel),
+                new ToggleWordManagerPaneAction(),
                 new ToggleDisguiseAction(project, splitPanel)
         ));
     }

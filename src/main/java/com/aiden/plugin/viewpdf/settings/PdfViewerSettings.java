@@ -59,6 +59,8 @@ public final class PdfViewerSettings implements PersistentStateComponent<PdfView
     private static final int DEFAULT_POPUP_OPACITY_PERCENT = 100;
     private static final int MIN_POPUP_OPACITY_PERCENT = 10;
     private static final int MAX_POPUP_OPACITY_PERCENT = 100;
+    private static final boolean DEFAULT_WORD_MANAGER_PANE_VISIBLE = false;
+    private static final int DEFAULT_WORD_MANAGER_PANE_WIDTH_PERCENT = 25;
     private static final boolean DEFAULT_WORD_POPUP_SHOW_MEANING = false;
     private static final boolean DEFAULT_WORD_POPUP_SHOW_SENTENCE = false;
     private static final boolean DEFAULT_WORD_POPUP_SHOW_SYNONYMS = false;
@@ -154,6 +156,9 @@ public final class PdfViewerSettings implements PersistentStateComponent<PdfView
         public List<String> wordFilterSources;
         public List<WordEntryData> wordEntries;
         public Map<String, WordLearningStateData> wordLearningStates;
+        public Boolean wordManagerPaneVisible;
+        public Integer wordManagerPaneWidthPercent;
+        public Map<String, List<String>> hiddenWordsByVocabularyBookKey;
     }
 
     private StateData state = new StateData();
@@ -913,6 +918,106 @@ public final class PdfViewerSettings implements PersistentStateComponent<PdfView
                 .wordCategoryFiltersChanged(normalizedDifficulties, normalizedThemes, normalizedSources);
     }
 
+    public boolean isWordManagerPaneVisible() {
+        Boolean value = state.wordManagerPaneVisible;
+        return value == null ? DEFAULT_WORD_MANAGER_PANE_VISIBLE : value;
+    }
+
+    public void setWordManagerPaneVisible(boolean visible) {
+        if (isWordManagerPaneVisible() == visible) {
+            return;
+        }
+        state.wordManagerPaneVisible = visible;
+        ApplicationManager.getApplication()
+                .getMessageBus()
+                .syncPublisher(PdfViewerSettingsListener.TOPIC)
+                .wordManagerPaneVisibilityChanged(visible);
+    }
+
+    public int getWordManagerPaneWidthPercent() {
+        Integer value = state.wordManagerPaneWidthPercent;
+        if (value == null) {
+            return DEFAULT_WORD_MANAGER_PANE_WIDTH_PERCENT;
+        }
+        return clampPercent(value);
+    }
+
+    public void setWordManagerPaneWidthPercent(int percent) {
+        int normalized = clampPercent(percent);
+        if (getWordManagerPaneWidthPercent() == normalized) {
+            return;
+        }
+        state.wordManagerPaneWidthPercent = normalized;
+        ApplicationManager.getApplication()
+                .getMessageBus()
+                .syncPublisher(PdfViewerSettingsListener.TOPIC)
+                .wordManagerPaneWidthPercentChanged(normalized);
+    }
+
+    public boolean isWordHiddenInPopup(@NotNull String bookKey, @Nullable String word) {
+        String normalizedBookKey = normalizeNullableText(bookKey);
+        String wordKey = normalizeWordKey(word);
+        if (normalizedBookKey == null || wordKey == null) {
+            return false;
+        }
+        Map<String, List<String>> map = state.hiddenWordsByVocabularyBookKey;
+        if (map == null || map.isEmpty()) {
+            return false;
+        }
+        List<String> hidden = map.get(normalizedBookKey);
+        if (hidden == null || hidden.isEmpty()) {
+            return false;
+        }
+        for (String candidate : hidden) {
+            if (wordKey.equals(normalizeWordKey(candidate))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public void setWordHiddenInPopup(@NotNull String bookKey, @Nullable String word, boolean hidden) {
+        String normalizedBookKey = normalizeNullableText(bookKey);
+        String wordKey = normalizeWordKey(word);
+        if (normalizedBookKey == null || wordKey == null) {
+            return;
+        }
+        if (isWordHiddenInPopup(normalizedBookKey, wordKey) == hidden) {
+            return;
+        }
+        if (state.hiddenWordsByVocabularyBookKey == null) {
+            state.hiddenWordsByVocabularyBookKey = new LinkedHashMap<>();
+        }
+        List<String> current = state.hiddenWordsByVocabularyBookKey.get(normalizedBookKey);
+        List<String> next = current == null ? new ArrayList<>() : new ArrayList<>(current);
+        LinkedHashMap<String, Boolean> unique = new LinkedHashMap<>();
+        for (String value : next) {
+            String normalized = normalizeWordKey(value);
+            if (normalized != null) {
+                unique.put(normalized, Boolean.TRUE);
+            }
+        }
+        boolean changed;
+        if (hidden) {
+            changed = unique.put(wordKey, Boolean.TRUE) == null;
+        } else {
+            changed = unique.remove(wordKey) != null;
+        }
+        if (!changed) {
+            return;
+        }
+        List<String> normalizedList = new ArrayList<>(unique.keySet());
+        if (normalizedList.isEmpty()) {
+            state.hiddenWordsByVocabularyBookKey.remove(normalizedBookKey);
+        } else {
+            state.hiddenWordsByVocabularyBookKey.put(normalizedBookKey, normalizedList);
+        }
+        ApplicationManager.getApplication()
+                .getMessageBus()
+                .syncPublisher(PdfViewerSettingsListener.TOPIC)
+                .wordHiddenStateChanged(normalizedBookKey);
+    }
+
     public @NotNull List<WordEntryData> getWordEntries() {
         List<WordEntryData> entries = state.wordEntries;
         if (entries == null || entries.isEmpty()) {
@@ -1045,6 +1150,10 @@ public final class PdfViewerSettings implements PersistentStateComponent<PdfView
         return normalized.toLowerCase(Locale.ROOT);
     }
 
+    private static int clampPercent(int percent) {
+        return Math.max(10, Math.min(60, percent));
+    }
+
     private static @Nullable String normalizeNullableText(@Nullable String value) {
         if (value == null) {
             return null;
@@ -1139,7 +1248,7 @@ public final class PdfViewerSettings implements PersistentStateComponent<PdfView
     }
 
     private static int clampWordPopupSize(int value) {
-        return Math.max(120, Math.min(2000, value));
+        return Math.max(1, Math.min(2000, value));
     }
 
     private static int clampWordPopupCoordinate(int value) {

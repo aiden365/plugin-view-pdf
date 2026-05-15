@@ -63,4 +63,13 @@ public interface PdfViewerSettingsListener {
     void wordSourceChanged(boolean builtinEnabled, @Nullable String customPath);
 
     void wordCategoryFiltersChanged(@NotNull List<String> difficulties, @NotNull List<String> themes, @NotNull List<String> sources);
+
+    default void wordManagerPaneVisibilityChanged(boolean visible) {
+    }
+
+    default void wordManagerPaneWidthPercentChanged(int percent) {
+    }
+
+    default void wordHiddenStateChanged(@NotNull String bookKey) {
+    }
 }
