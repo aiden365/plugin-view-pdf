@@ -258,6 +258,14 @@ public final class WordManagerPanel implements Disposable {
                             refreshTable();
                         }
                     }
+
+                    @Override
+                    public void masteredWordLibraryChanged() {
+                        if (Objects.equals(settings.getSelectedVocabularyBookKey(), WordLibraryLoader.getSystemMasteredBookKey())) {
+                            pageIndex = 0;
+                            refreshTable();
+                        }
+                    }
                 });
     }
 
@@ -574,4 +582,3 @@ public final class WordManagerPanel implements Disposable {
         }
     }
 }
-

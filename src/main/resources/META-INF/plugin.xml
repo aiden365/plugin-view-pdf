@@ -32,6 +32,9 @@
                 instance="com.aiden.plugin.viewpdf.settings.PdfViewerConfigurable"/>
 
         <postStartupActivity implementation="com.aiden.plugin.viewpdf.settings.WordLibraryStartupActivity"/>
+        <postStartupActivity implementation="com.aiden.plugin.viewpdf.bookreading.BookReadingStartupActivity"/>
+
+        <notificationGroup id="XTools.BookReading" displayType="TOOL_WINDOW" isLogByDefault="true"/>
 
         <toolWindow
                 id="XTools"
@@ -106,6 +109,24 @@
                 class="com.aiden.plugin.viewpdf.actions.MarkWordMasteredAction"
                 text="切换已学会状态"
                 description="切换当前单词为已学会或未学会并持久化">
+            <add-to-group group-id="ToolsMenu" anchor="last"/>
+        </action>
+
+        <action
+                id="com.aiden.plugin.viewpdf.actions.PrevBookLine"
+                class="com.aiden.plugin.viewpdf.actions.PrevBookLineAction"
+                text="上一行"
+                description="阅读当前图书上一行并输出到通知栏">
+            <keyboard-shortcut keymap="$default" first-keystroke="ctrl alt UP"/>
+            <add-to-group group-id="ToolsMenu" anchor="last"/>
+        </action>
+
+        <action
+                id="com.aiden.plugin.viewpdf.actions.NextBookLine"
+                class="com.aiden.plugin.viewpdf.actions.NextBookLineAction"
+                text="下一行"
+                description="阅读当前图书下一行并输出到通知栏">
+            <keyboard-shortcut keymap="$default" first-keystroke="ctrl alt DOWN"/>
             <add-to-group group-id="ToolsMenu" anchor="last"/>
         </action>
     </actions>

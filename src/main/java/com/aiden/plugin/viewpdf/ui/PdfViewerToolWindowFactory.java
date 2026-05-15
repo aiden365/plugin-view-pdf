@@ -3,6 +3,7 @@ package com.aiden.plugin.viewpdf.ui;
 import com.aiden.plugin.viewpdf.PdfViewerKeys;
 import com.aiden.plugin.viewpdf.settings.PdfViewerSettings;
 import com.aiden.plugin.viewpdf.settings.PdfViewerSettingsListener;
+import com.intellij.openapi.Disposable;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.project.DumbAware;
 import com.intellij.openapi.project.Project;
@@ -12,18 +13,31 @@ import com.intellij.ui.content.Content;
 import com.intellij.ui.content.ContentFactory;
 import org.jetbrains.annotations.NotNull;
 
+import javax.swing.JPanel;
+import java.awt.BorderLayout;
 import java.util.List;
 
 public final class PdfViewerToolWindowFactory implements ToolWindowFactory, DumbAware {
     @Override
     public void createToolWindowContent(@NotNull Project project, @NotNull ToolWindow toolWindow) {
         StealthSplitPanel splitPanel = new StealthSplitPanel(project);
+        BookManagerPanel bookManagerPanel = new BookManagerPanel(project);
+        bookManagerPanel.getComponent().setVisible(false);
+
+        JPanel toolWindowPanel = new JPanel(new BorderLayout());
+        toolWindowPanel.add(splitPanel.getComponent(), BorderLayout.CENTER);
+        toolWindowPanel.add(bookManagerPanel.getComponent(), BorderLayout.SOUTH);
+
         PdfViewerToolWindowController controller = new PdfViewerToolWindowController(splitPanel.getPdfPanel(), splitPanel);
         controller.setPdfVisible(false);
         project.putUserData(PdfViewerKeys.CONTROLLER_KEY, controller);
 
-        Content content = ContentFactory.getInstance().createContent(splitPanel.getComponent(), "", false);
-        content.setDisposer(splitPanel);
+        Content content = ContentFactory.getInstance().createContent(toolWindowPanel, "", false);
+        Disposable disposer = () -> {
+            bookManagerPanel.dispose();
+            splitPanel.dispose();
+        };
+        content.setDisposer(disposer);
         toolWindow.getContentManager().addContent(content);
 
         PdfViewerSettings settings = PdfViewerSettings.getInstance();
@@ -129,6 +143,13 @@ public final class PdfViewerToolWindowFactory implements ToolWindowFactory, Dumb
                     }
 
                     @Override
+                    public void bookManagerPaneVisibilityChanged(boolean visible) {
+                        bookManagerPanel.getComponent().setVisible(visible);
+                        toolWindowPanel.revalidate();
+                        toolWindowPanel.repaint();
+                    }
+
+                    @Override
                     public void editorPopupSizeChanged(int width, int height) {
                     }
 
@@ -163,8 +184,10 @@ public final class PdfViewerToolWindowFactory implements ToolWindowFactory, Dumb
                 });
 
         splitPanel.setWordManagerPaneVisible(settings.isWordManagerPaneVisible());
+        bookManagerPanel.getComponent().setVisible(settings.isBookManagerPaneVisible());
         toolWindow.setTitleActions(List.of(
                 new ToggleThirdPaneAction(splitPanel),
+                new ToggleBookManagerPaneAction(),
                 new ToggleWordManagerPaneAction(),
                 new ToggleDisguiseAction(project, splitPanel)
         ));

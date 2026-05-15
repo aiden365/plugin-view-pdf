@@ -25,15 +25,19 @@ import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JPopupMenu;
 import javax.swing.JMenuItem;
-import javax.swing.OverlayLayout;
 import javax.swing.SwingConstants;
 import javax.swing.SwingUtilities;
 import javax.swing.Timer;
+import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Component;
 import java.awt.Cursor;
 import java.awt.Dimension;
 import java.awt.Font;
+import java.awt.GridBagConstraints;
+import java.awt.GridBagLayout;
+import java.awt.GridLayout;
+import java.awt.Insets;
 import java.awt.Point;
 import java.awt.Window;
 import java.awt.event.ComponentAdapter;
@@ -47,20 +51,23 @@ import java.util.Objects;
 
 public final class WordPopupController implements Disposable {
     private static final Color POPUP_BACKGROUND = new Color(35, 37, 40);
-    private static final Color POPUP_BORDER_COLOR = new Color(70, 70, 70);
+    private static final int MENU_PANEL_WIDTH = 44;
 
     private final Project project;
     private final JPanel rootPanel;
     private final JPanel contentPanel;
-    private final JPanel navOverlayPanel;
     private final JLabel wordLabel;
     private final JLabel phoneticLabel;
     private final JLabel meaningLabel;
     private final JLabel sentenceLabel;
     private final JLabel synonymsLabel;
     private final JLabel hintLabel;
-    private final JLabel leftArrowLabel;
-    private final JLabel rightArrowLabel;
+    private final JPanel menuPanel;
+    private final JPanel menuGrid;
+    private final JLabel prevWordLabel;
+    private final JLabel nextWordLabel;
+    private final JLabel translateToggleLabel;
+    private final JLabel masteredToggleLabel;
 
     private JBPopup popup;
     private Editor lastEditor;
@@ -77,6 +84,7 @@ public final class WordPopupController implements Disposable {
     private int pendingX;
     private int pendingY;
     private Timer boundsPersistTimer;
+    private Boolean meaningVisibleOverride;
 
     public static @NotNull WordPopupController getOrCreate(@NotNull Project project) {
         WordPopupController existing = project.getUserData(PdfViewerKeys.WORD_POPUP_CONTROLLER_KEY);
@@ -92,7 +100,7 @@ public final class WordPopupController implements Disposable {
     private WordPopupController(@NotNull Project project) {
         this.project = project;
         this.rootPanel = new JPanel();
-        this.rootPanel.setLayout(new OverlayLayout(rootPanel));
+        this.rootPanel.setLayout(new BorderLayout());
         this.rootPanel.setOpaque(true);
         this.rootPanel.setBackground(POPUP_BACKGROUND);
         this.rootPanel.setBorder(BorderFactory.createEmptyBorder(3, 3, 3, 3));
@@ -107,41 +115,32 @@ public final class WordPopupController implements Disposable {
         this.sentenceLabel = new JLabel("", SwingConstants.LEFT);
         this.synonymsLabel = new JLabel("", SwingConstants.LEFT);
         this.hintLabel = new JLabel("", SwingConstants.LEFT);
-        this.leftArrowLabel = new JLabel(AllIcons.Actions.Back, SwingConstants.CENTER);
-        this.rightArrowLabel = new JLabel(AllIcons.Actions.Forward, SwingConstants.CENTER);
-
-        this.navOverlayPanel = new JPanel(null) {
-            @Override
-            public boolean contains(int x, int y) {
-                if (leftArrowLabel.isVisible()) {
-                    Point p = SwingUtilities.convertPoint(this, x, y, leftArrowLabel);
-                    if (leftArrowLabel.contains(p)) {
-                        return true;
-                    }
-                }
-                if (rightArrowLabel.isVisible()) {
-                    Point p = SwingUtilities.convertPoint(this, x, y, rightArrowLabel);
-                    if (rightArrowLabel.contains(p)) {
-                        return true;
-                    }
-                }
-                return false;
-            }
-        };
-        this.navOverlayPanel.setOpaque(false);
+        this.prevWordLabel = new JLabel(AllIcons.Actions.Back, SwingConstants.CENTER);
+        this.nextWordLabel = new JLabel(AllIcons.Actions.Forward, SwingConstants.CENTER);
+        this.translateToggleLabel = new JLabel("中", SwingConstants.CENTER);
+        this.masteredToggleLabel = new JLabel("否", SwingConstants.CENTER);
+        this.menuGrid = new JPanel(new GridLayout(2, 2, 2, 2));
+        this.menuPanel = new JPanel(new GridBagLayout());
+        this.menuGrid.setOpaque(false);
+        this.menuPanel.setOpaque(false);
         this.wordLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
         this.phoneticLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
         this.meaningLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
         this.sentenceLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
         this.synonymsLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
         this.hintLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
-
-        this.leftArrowLabel.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-        this.rightArrowLabel.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-        this.leftArrowLabel.setOpaque(false);
-        this.rightArrowLabel.setOpaque(false);
-        this.leftArrowLabel.setVisible(false);
-        this.rightArrowLabel.setVisible(false);
+        this.prevWordLabel.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        this.nextWordLabel.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        this.translateToggleLabel.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        this.masteredToggleLabel.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        this.prevWordLabel.setOpaque(false);
+        this.nextWordLabel.setOpaque(false);
+        this.translateToggleLabel.setOpaque(false);
+        this.masteredToggleLabel.setOpaque(false);
+        this.prevWordLabel.setVisible(false);
+        this.nextWordLabel.setVisible(false);
+        this.translateToggleLabel.setVisible(false);
+        this.masteredToggleLabel.setVisible(false);
 
         this.contentPanel.add(wordLabel);
         this.contentPanel.add(Box.createVerticalStrut(8));
@@ -153,13 +152,36 @@ public final class WordPopupController implements Disposable {
         this.contentPanel.add(Box.createVerticalStrut(8));
         this.contentPanel.add(synonymsLabel);
         this.contentPanel.add(Box.createVerticalGlue());
+        menuGrid.add(prevWordLabel);
+        menuGrid.add(nextWordLabel);
+        menuGrid.add(translateToggleLabel);
+        menuGrid.add(masteredToggleLabel);
+        GridBagConstraints menuGbc = new GridBagConstraints();
+        menuGbc.gridx = 0;
+        menuGbc.gridy = 0;
+        menuGbc.anchor = GridBagConstraints.CENTER;
+        menuGbc.fill = GridBagConstraints.NONE;
+        menuGbc.weightx = 1;
+        menuGbc.weighty = 1;
+        menuGbc.insets = new Insets(0, 0, 0, 0);
+        menuPanel.add(menuGrid, menuGbc);
 
-        navOverlayPanel.add(leftArrowLabel);
-        navOverlayPanel.add(rightArrowLabel);
+        rootPanel.add(contentPanel, BorderLayout.CENTER);
+        rootPanel.add(menuPanel, BorderLayout.EAST);
 
-        rootPanel.add(contentPanel);
-        rootPanel.add(navOverlayPanel);
+        MouseAdapter contextMenuListener = new MouseAdapter() {
+            @Override
+            public void mousePressed(MouseEvent e) {
+                maybeShowContextMenu(e);
+            }
 
+            @Override
+            public void mouseReleased(MouseEvent e) {
+                maybeShowContextMenu(e);
+            }
+        };
+        this.rootPanel.addMouseListener(contextMenuListener);
+        this.menuPanel.addMouseListener(contextMenuListener);
         this.contentPanel.addMouseListener(new MouseAdapter() {
             @Override
             public void mousePressed(MouseEvent e) {
@@ -169,6 +191,54 @@ public final class WordPopupController implements Disposable {
             @Override
             public void mouseReleased(MouseEvent e) {
                 maybeShowContextMenu(e);
+            }
+        });
+
+        this.prevWordLabel.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mousePressed(MouseEvent e) {
+                if (!SwingUtilities.isLeftMouseButton(e) || e.isControlDown()) {
+                    return;
+                }
+                showPreviousWord();
+            }
+        });
+        this.nextWordLabel.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mousePressed(MouseEvent e) {
+                if (!SwingUtilities.isLeftMouseButton(e) || e.isControlDown()) {
+                    return;
+                }
+                showNextWord();
+            }
+        });
+        this.translateToggleLabel.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mousePressed(MouseEvent e) {
+                if (!SwingUtilities.isLeftMouseButton(e) || e.isControlDown()) {
+                    return;
+                }
+                PdfViewerSettings settings = PdfViewerSettings.getInstance();
+                boolean base = settings.isWordPopupShowMeaning();
+                boolean current = meaningVisibleOverride == null ? base : meaningVisibleOverride;
+                meaningVisibleOverride = !current;
+                refreshContent();
+            }
+        });
+        this.masteredToggleLabel.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mousePressed(MouseEvent e) {
+                if (!SwingUtilities.isLeftMouseButton(e) || e.isControlDown()) {
+                    return;
+                }
+                PdfViewerSettings.WordEntryData current = getCurrentEntry();
+                if (current == null || current.word == null || current.word.isBlank()) {
+                    return;
+                }
+                PdfViewerSettings settings = PdfViewerSettings.getInstance();
+                settings.toggleWordMastered(current);
+                refreshWordPool(true);
+                refreshContent();
             }
         });
         MouseAdapter ctrlDragListener = new MouseAdapter() {
@@ -221,7 +291,7 @@ public final class WordPopupController implements Disposable {
         MouseAdapter hoverListener = new MouseAdapter() {
             @Override
             public void mouseEntered(MouseEvent e) {
-                setNavigationVisible(true);
+                setMenuVisible(true);
             }
 
             @Override
@@ -231,29 +301,10 @@ public final class WordPopupController implements Disposable {
                 if (rootPanel.contains(local)) {
                     return;
                 }
-                setNavigationVisible(false);
+                setMenuVisible(false);
             }
         };
         installHoverListeners(hoverListener);
-
-        leftArrowLabel.addMouseListener(new MouseAdapter() {
-            @Override
-            public void mousePressed(MouseEvent e) {
-                if (!SwingUtilities.isLeftMouseButton(e)) {
-                    return;
-                }
-                showPreviousWord();
-            }
-        });
-        rightArrowLabel.addMouseListener(new MouseAdapter() {
-            @Override
-            public void mousePressed(MouseEvent e) {
-                if (!SwingUtilities.isLeftMouseButton(e)) {
-                    return;
-                }
-                showNextWord();
-            }
-        });
 
         refreshWordPool(true);
         refreshContent();
@@ -439,7 +490,7 @@ public final class WordPopupController implements Disposable {
     }
 
     public void showNextWord() {
-        refreshWordPool(false);
+        refreshWordPool(true);
         if (activeWords.isEmpty()) {
             refreshContent();
             return;
@@ -453,7 +504,7 @@ public final class WordPopupController implements Disposable {
     }
 
     public void showPreviousWord() {
-        refreshWordPool(false);
+        refreshWordPool(true);
         if (activeWords.isEmpty()) {
             refreshContent();
             return;
@@ -473,7 +524,7 @@ public final class WordPopupController implements Disposable {
         if (current == null || current.word == null || current.word.isBlank()) {
             return;
         }
-        boolean mastered = PdfViewerSettings.getInstance().toggleWordMastered(current.word);
+        boolean mastered = PdfViewerSettings.getInstance().toggleWordMastered(current);
         refreshWordPool(true);
         if (mastered && !activeWords.isEmpty()) {
             int next = findNextIndexSkippingMastered(currentIndex);
@@ -530,7 +581,9 @@ public final class WordPopupController implements Disposable {
             phoneticLabel.setText("");
             phoneticLabel.setVisible(false);
             meaningLabel.setText("请先导入词库或在设置中放宽分类筛选");
+            meaningLabel.setVisible(true);
             hintLabel.setText("快捷键：显示/隐藏、下一个单词、标记已学会");
+            masteredToggleLabel.setText("否");
             applyStyle(settings);
             return;
         }
@@ -541,7 +594,7 @@ public final class WordPopupController implements Disposable {
         phoneticLabel.setText(phonetic.isEmpty() ? "" : "/" + phonetic + "/");
         phoneticLabel.setVisible(false);
 
-        boolean showMeaning = settings.isWordPopupShowMeaning();
+        boolean showMeaning = meaningVisibleOverride == null ? settings.isWordPopupShowMeaning() : meaningVisibleOverride;
         boolean showSentence = settings.isWordPopupShowSentence();
         boolean showSynonyms = settings.isWordPopupShowSynonyms();
 
@@ -554,6 +607,7 @@ public final class WordPopupController implements Disposable {
         synonymsLabel.setVisible(showSynonyms);
         synonymsLabel.setText(showSynonyms ? toHtmlSynonyms(current.synonymsByPos) : "");
 
+        masteredToggleLabel.setText(settings.isWordMastered(current.word) ? "是" : "否");
         hintLabel.setText("快捷键：下一个单词 / 标记已学会（右键可切换状态）");
         applyStyle(settings);
     }
@@ -564,33 +618,38 @@ public final class WordPopupController implements Disposable {
         int fontSize = settings.getWordPopupFontSize();
         Color fontColor = settings.getWordPopupFontColor();
 
-        Dimension size = new Dimension(width, height);
-        rootPanel.setPreferredSize(size);
-        contentPanel.setPreferredSize(size);
-        navOverlayPanel.setPreferredSize(size);
+        int contentWidth = Math.max(1, width - MENU_PANEL_WIDTH);
+        Dimension rootSize = new Dimension(width, height);
+        rootPanel.setPreferredSize(rootSize);
+        contentPanel.setPreferredSize(new Dimension(contentWidth, height));
+        menuPanel.setPreferredSize(new Dimension(MENU_PANEL_WIDTH, height));
+        int menuGridSize = Math.max(24, MENU_PANEL_WIDTH - 6);
+        menuGrid.setPreferredSize(new Dimension(menuGridSize, menuGridSize));
 
         Font base = wordLabel.getFont();
         Font wordFont = base.deriveFont(Font.BOLD, Math.max(10, fontSize + 2));
         Font detailFont = base.deriveFont(Font.PLAIN, Math.max(8, fontSize - 2));
         Font meaningFont = base.deriveFont(Font.PLAIN, fontSize);
+        Font menuFont = base.deriveFont(Font.BOLD, Math.max(10, fontSize - 4));
         wordLabel.setFont(wordFont);
         phoneticLabel.setFont(detailFont);
         meaningLabel.setFont(meaningFont);
         sentenceLabel.setFont(detailFont);
         synonymsLabel.setFont(detailFont);
         hintLabel.setFont(detailFont);
+        translateToggleLabel.setFont(menuFont);
+        masteredToggleLabel.setFont(menuFont);
         wordLabel.setForeground(fontColor);
         phoneticLabel.setForeground(fontColor);
         meaningLabel.setForeground(fontColor);
         sentenceLabel.setForeground(fontColor);
         synonymsLabel.setForeground(fontColor);
         hintLabel.setForeground(fontColor.darker());
+        translateToggleLabel.setForeground(fontColor);
+        masteredToggleLabel.setForeground(fontColor);
 
         contentPanel.revalidate();
         contentPanel.repaint();
-        if (leftArrowLabel.isVisible() || rightArrowLabel.isVisible()) {
-            layoutNavigationArrows();
-        }
     }
 
     private void relocatePopup(@NotNull PdfViewerSettings settings) {
@@ -687,7 +746,7 @@ public final class WordPopupController implements Disposable {
         JPopupMenu menu = new JPopupMenu();
         JMenuItem toggleMastered = new JMenuItem(mastered ? "标记为未学会" : "标记为已学会");
         toggleMastered.addActionListener(e -> {
-            settings.toggleWordMastered(current.word);
+            settings.toggleWordMastered(current);
             refreshWordPool(true);
             refreshContent();
         });
@@ -765,32 +824,13 @@ public final class WordPopupController implements Disposable {
         return popup != null && !popup.isDisposed();
     }
 
-    private void layoutNavigationArrows() {
-        int width = rootPanel.getWidth();
-        int height = rootPanel.getHeight();
-        if (width <= 0 || height <= 0) {
-            return;
-        }
-        navOverlayPanel.setBounds(0, 0, width, height);
-        Dimension prevSize = leftArrowLabel.getPreferredSize();
-        Dimension nextSize = rightArrowLabel.getPreferredSize();
-        int gap = 4;
-        int stackHeight = prevSize.height + gap + nextSize.height;
-        int startY = (height - stackHeight) / 2;
-        int maxWidth = Math.max(prevSize.width, nextSize.width);
-        int x = Math.max(2, width - 2 - maxWidth);
-        leftArrowLabel.setBounds(x, startY, maxWidth, prevSize.height);
-        rightArrowLabel.setBounds(x, startY + prevSize.height + gap, maxWidth, nextSize.height);
-    }
-
-    private void setNavigationVisible(boolean visible) {
+    private void setMenuVisible(boolean visible) {
         boolean effective = visible && isPopupActive() && getCurrentEntry() != null;
-        leftArrowLabel.setVisible(effective);
-        rightArrowLabel.setVisible(effective);
-        if (effective) {
-            layoutNavigationArrows();
-        }
-        navOverlayPanel.repaint();
+        prevWordLabel.setVisible(effective);
+        nextWordLabel.setVisible(effective);
+        translateToggleLabel.setVisible(effective);
+        masteredToggleLabel.setVisible(effective);
+        menuPanel.repaint();
     }
 
     private void installCtrlDragListeners(@NotNull MouseAdapter listener) {
@@ -798,8 +838,10 @@ public final class WordPopupController implements Disposable {
         rootPanel.addMouseMotionListener(listener);
         contentPanel.addMouseListener(listener);
         contentPanel.addMouseMotionListener(listener);
-        navOverlayPanel.addMouseListener(listener);
-        navOverlayPanel.addMouseMotionListener(listener);
+        menuPanel.addMouseListener(listener);
+        menuPanel.addMouseMotionListener(listener);
+        menuGrid.addMouseListener(listener);
+        menuGrid.addMouseMotionListener(listener);
         wordLabel.addMouseListener(listener);
         wordLabel.addMouseMotionListener(listener);
         phoneticLabel.addMouseListener(listener);
@@ -812,24 +854,31 @@ public final class WordPopupController implements Disposable {
         synonymsLabel.addMouseMotionListener(listener);
         hintLabel.addMouseListener(listener);
         hintLabel.addMouseMotionListener(listener);
-        leftArrowLabel.addMouseListener(listener);
-        leftArrowLabel.addMouseMotionListener(listener);
-        rightArrowLabel.addMouseListener(listener);
-        rightArrowLabel.addMouseMotionListener(listener);
+        prevWordLabel.addMouseListener(listener);
+        prevWordLabel.addMouseMotionListener(listener);
+        nextWordLabel.addMouseListener(listener);
+        nextWordLabel.addMouseMotionListener(listener);
+        translateToggleLabel.addMouseListener(listener);
+        translateToggleLabel.addMouseMotionListener(listener);
+        masteredToggleLabel.addMouseListener(listener);
+        masteredToggleLabel.addMouseMotionListener(listener);
     }
 
     private void installHoverListeners(@NotNull MouseAdapter listener) {
         rootPanel.addMouseListener(listener);
         contentPanel.addMouseListener(listener);
-        navOverlayPanel.addMouseListener(listener);
+        menuPanel.addMouseListener(listener);
+        menuGrid.addMouseListener(listener);
         wordLabel.addMouseListener(listener);
         phoneticLabel.addMouseListener(listener);
         meaningLabel.addMouseListener(listener);
         sentenceLabel.addMouseListener(listener);
         synonymsLabel.addMouseListener(listener);
         hintLabel.addMouseListener(listener);
-        leftArrowLabel.addMouseListener(listener);
-        rightArrowLabel.addMouseListener(listener);
+        prevWordLabel.addMouseListener(listener);
+        nextWordLabel.addMouseListener(listener);
+        translateToggleLabel.addMouseListener(listener);
+        masteredToggleLabel.addMouseListener(listener);
     }
 
     private void attachWindowTracking() {

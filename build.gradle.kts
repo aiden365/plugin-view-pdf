@@ -5,7 +5,7 @@ plugins {
 }
 
 group = "com.aiden.plugin"
-version = "1.0-SNAPSHOT"
+version = "1.0.2"
 
 repositories {
     mavenCentral()
@@ -35,7 +35,7 @@ intellijPlatform {
         }
 
         changeNotes = """
-            Initial version
+            Improve word popup navigation arrows click handling
         """.trimIndent()
     }
 }

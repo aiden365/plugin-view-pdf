@@ -15,6 +15,10 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.UUID;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 
 @State(
         name = "PdfViewerSettings",
@@ -61,6 +65,7 @@ public final class PdfViewerSettings implements PersistentStateComponent<PdfView
     private static final int MAX_POPUP_OPACITY_PERCENT = 100;
     private static final boolean DEFAULT_WORD_MANAGER_PANE_VISIBLE = false;
     private static final int DEFAULT_WORD_MANAGER_PANE_WIDTH_PERCENT = 25;
+    private static final boolean DEFAULT_BOOK_MANAGER_PANE_VISIBLE = false;
     private static final boolean DEFAULT_WORD_POPUP_SHOW_MEANING = false;
     private static final boolean DEFAULT_WORD_POPUP_SHOW_SENTENCE = false;
     private static final boolean DEFAULT_WORD_POPUP_SHOW_SYNONYMS = false;
@@ -68,6 +73,8 @@ public final class PdfViewerSettings implements PersistentStateComponent<PdfView
     private static final String DEFAULT_WORD_BUILTIN_BOOK = "CET4luan_2";
     private static final String BUILTIN_KEY_PREFIX = "builtin:";
     private static final String CUSTOM_KEY_PREFIX = "custom:";
+    private static final String BOOK_SOURCE_IMPORT = "import";
+    private static final String BOOK_SOURCE_MANUAL = "manual";
 
     public static final class WordEntryData {
         public String word;
@@ -96,6 +103,15 @@ public final class PdfViewerSettings implements PersistentStateComponent<PdfView
     public static final class CustomVocabularyBookData {
         public String name;
         public String jsonlPath;
+        public Long createdAtEpochMillis;
+    }
+
+    public static final class BookData {
+        public String id;
+        public String name;
+        public String sourceType;
+        public String filePath;
+        public String inlineContent;
         public Long createdAtEpochMillis;
     }
 
@@ -158,7 +174,11 @@ public final class PdfViewerSettings implements PersistentStateComponent<PdfView
         public Map<String, WordLearningStateData> wordLearningStates;
         public Boolean wordManagerPaneVisible;
         public Integer wordManagerPaneWidthPercent;
+        public Boolean bookManagerPaneVisible;
         public Map<String, List<String>> hiddenWordsByVocabularyBookKey;
+        public List<BookData> books;
+        public Map<String, Integer> bookReadLineById;
+        public String currentReadingBookId;
     }
 
     private StateData state = new StateData();
@@ -175,6 +195,7 @@ public final class PdfViewerSettings implements PersistentStateComponent<PdfView
     @Override
     public void loadState(@NotNull StateData state) {
         this.state = state;
+        normalizeStateAfterLoad();
     }
 
     public @Nullable String getPdfPath() {
@@ -954,6 +975,22 @@ public final class PdfViewerSettings implements PersistentStateComponent<PdfView
                 .wordManagerPaneWidthPercentChanged(normalized);
     }
 
+    public boolean isBookManagerPaneVisible() {
+        Boolean value = state.bookManagerPaneVisible;
+        return value == null ? DEFAULT_BOOK_MANAGER_PANE_VISIBLE : value;
+    }
+
+    public void setBookManagerPaneVisible(boolean visible) {
+        if (isBookManagerPaneVisible() == visible) {
+            return;
+        }
+        state.bookManagerPaneVisible = visible;
+        ApplicationManager.getApplication()
+                .getMessageBus()
+                .syncPublisher(PdfViewerSettingsListener.TOPIC)
+                .bookManagerPaneVisibilityChanged(visible);
+    }
+
     public boolean isWordHiddenInPopup(@NotNull String bookKey, @Nullable String word) {
         String normalizedBookKey = normalizeNullableText(bookKey);
         String wordKey = normalizeWordKey(word);
@@ -1073,6 +1110,32 @@ public final class PdfViewerSettings implements PersistentStateComponent<PdfView
         return learningState != null && Boolean.TRUE.equals(learningState.mastered);
     }
 
+    public void setWordMastered(@NotNull WordEntryData entry, boolean mastered) {
+        if (entry.word == null || entry.word.isBlank()) {
+            return;
+        }
+        String key = normalizeWordKey(entry.word);
+        if (key == null) {
+            return;
+        }
+        if (isWordMastered(key) == mastered) {
+            return;
+        }
+        updateWordLearningState(key, mastered);
+        if (mastered) {
+            MasteredWordLibrary.upsert(entry);
+        } else {
+            MasteredWordLibrary.remove(entry.word);
+        }
+        if (Objects.equals(getSelectedVocabularyBookKey(), WordLibraryLoader.getSystemMasteredBookKey())) {
+            WordLibraryLoader.reloadWordEntriesFromSettings(this);
+            ApplicationManager.getApplication()
+                    .getMessageBus()
+                    .syncPublisher(PdfViewerSettingsListener.TOPIC)
+                    .masteredWordLibraryChanged();
+        }
+    }
+
     public void setWordMastered(@Nullable String word, boolean mastered) {
         String key = normalizeWordKey(word);
         if (key == null) {
@@ -1097,10 +1160,28 @@ public final class PdfViewerSettings implements PersistentStateComponent<PdfView
                 .wordSourceChanged(isWordSourceBuiltinEnabled(), getWordSourceCustomPath());
     }
 
+    public boolean toggleWordMastered(@NotNull WordEntryData entry) {
+        boolean next = !isWordMastered(entry.word);
+        setWordMastered(entry, next);
+        return next;
+    }
+
     public boolean toggleWordMastered(@Nullable String word) {
         boolean next = !isWordMastered(word);
         setWordMastered(word, next);
         return next;
+    }
+
+    private void updateWordLearningState(@NotNull String key, boolean mastered) {
+        if (state.wordLearningStates == null) {
+            state.wordLearningStates = new LinkedHashMap<>();
+        }
+        WordLearningStateData learningState = state.wordLearningStates.computeIfAbsent(key, unused -> new WordLearningStateData());
+        learningState.mastered = mastered;
+        long now = System.currentTimeMillis();
+        learningState.lastReviewedAtEpochMillis = now;
+        int previousCount = learningState.reviewCount == null ? 0 : Math.max(0, learningState.reviewCount);
+        learningState.reviewCount = previousCount + 1;
     }
 
     public int getPdfReadPosition(@Nullable String pdfPath) {
@@ -1131,12 +1212,363 @@ public final class PdfViewerSettings implements PersistentStateComponent<PdfView
         state.pdfReadPositions.put(key, normalized);
     }
 
+    public @NotNull List<BookData> getBooks() {
+        List<BookData> normalized = normalizeBookLibrary(state.books);
+        return normalized.isEmpty() ? List.of() : normalized;
+    }
+
+    public void setBooks(@NotNull List<BookData> books) {
+        List<BookData> next = normalizeBookLibrary(books);
+        List<BookData> current = normalizeBookLibrary(state.books);
+        if (areBookLibrariesEqual(current, next)) {
+            return;
+        }
+        state.books = next.isEmpty() ? null : next;
+        String previousCurrentBookId = normalizeNullableText(state.currentReadingBookId);
+        String nextCurrentBookId = previousCurrentBookId;
+        if (nextCurrentBookId != null && !containsBookId(next, nextCurrentBookId)) {
+            nextCurrentBookId = null;
+            state.currentReadingBookId = null;
+        }
+        if (state.bookReadLineById != null && !state.bookReadLineById.isEmpty()) {
+            LinkedHashMap<String, Integer> pruned = new LinkedHashMap<>();
+            for (Map.Entry<String, Integer> entry : state.bookReadLineById.entrySet()) {
+                String bookId = normalizeNullableText(entry.getKey());
+                if (bookId == null || !containsBookId(next, bookId)) {
+                    continue;
+                }
+                Integer lineNumber = entry.getValue();
+                int normalizedLine = lineNumber == null ? 1 : Math.max(1, lineNumber);
+                pruned.put(bookId, normalizedLine);
+            }
+            state.bookReadLineById = pruned.isEmpty() ? null : pruned;
+        }
+        ApplicationManager.getApplication()
+                .getMessageBus()
+                .syncPublisher(PdfViewerSettingsListener.TOPIC)
+                .bookLibraryChanged();
+        if (!Objects.equals(previousCurrentBookId, nextCurrentBookId)) {
+            ApplicationManager.getApplication()
+                    .getMessageBus()
+                    .syncPublisher(PdfViewerSettingsListener.TOPIC)
+                    .currentReadingBookChanged(nextCurrentBookId);
+        }
+    }
+
+    public @Nullable String addImportedBook(@NotNull String name, @NotNull String filePath) {
+        String normalizedName = normalizeNullableText(name);
+        String normalizedPath = normalizeNullableText(filePath);
+        if (normalizedName == null || normalizedPath == null) {
+            return null;
+        }
+        List<BookData> current = new ArrayList<>(getBooks());
+        String uniqueName = resolveUniqueBookName(current, normalizedName);
+        BookData book = new BookData();
+        book.id = UUID.randomUUID().toString();
+        book.name = uniqueName;
+        book.sourceType = BOOK_SOURCE_IMPORT;
+        book.filePath = normalizedPath;
+        book.inlineContent = safeReadTextFile(normalizedPath);
+        book.createdAtEpochMillis = System.currentTimeMillis();
+        current.add(book);
+        setBooks(current);
+        return book.id;
+    }
+
+    public @Nullable String addManualBook(@NotNull String name, @Nullable String inlineContent) {
+        String normalizedName = normalizeNullableText(name);
+        if (normalizedName == null) {
+            return null;
+        }
+        List<BookData> current = new ArrayList<>(getBooks());
+        String uniqueName = resolveUniqueBookName(current, normalizedName);
+        BookData book = new BookData();
+        book.id = UUID.randomUUID().toString();
+        book.name = uniqueName;
+        book.sourceType = BOOK_SOURCE_MANUAL;
+        book.inlineContent = inlineContent;
+        book.createdAtEpochMillis = System.currentTimeMillis();
+        current.add(book);
+        setBooks(current);
+        return book.id;
+    }
+
+    public boolean reimportBook(@NotNull String bookId, @NotNull String filePath) {
+        String normalizedId = normalizeNullableText(bookId);
+        String normalizedPath = normalizeNullableText(filePath);
+        if (normalizedId == null || normalizedPath == null) {
+            return false;
+        }
+        List<BookData> current = new ArrayList<>(getBooks());
+        boolean changed = false;
+        for (BookData book : current) {
+            if (book == null || book.id == null) {
+                continue;
+            }
+            if (!normalizedId.equals(book.id)) {
+                continue;
+            }
+            if (!BOOK_SOURCE_IMPORT.equals(normalizeBookSourceType(book.sourceType))) {
+                return false;
+            }
+            String nextContent = safeReadTextFile(normalizedPath);
+            if (Objects.equals(normalizeNullableText(book.filePath), normalizedPath)
+                    && Objects.equals(book.inlineContent, nextContent)) {
+                return false;
+            }
+            book.filePath = normalizedPath;
+            book.inlineContent = nextContent;
+            changed = true;
+            break;
+        }
+        if (!changed) {
+            return false;
+        }
+        setBooks(current);
+        return true;
+    }
+
+    public boolean updateManualBookContent(@NotNull String bookId, @Nullable String inlineContent) {
+        String normalizedId = normalizeNullableText(bookId);
+        if (normalizedId == null) {
+            return false;
+        }
+        List<BookData> current = new ArrayList<>(getBooks());
+        boolean changed = false;
+        for (BookData book : current) {
+            if (book == null || book.id == null) {
+                continue;
+            }
+            if (!normalizedId.equals(book.id)) {
+                continue;
+            }
+            if (!BOOK_SOURCE_MANUAL.equals(normalizeBookSourceType(book.sourceType))) {
+                return false;
+            }
+            if (Objects.equals(book.inlineContent, inlineContent)) {
+                return false;
+            }
+            book.inlineContent = inlineContent;
+            changed = true;
+            break;
+        }
+        if (!changed) {
+            return false;
+        }
+        setBooks(current);
+        return true;
+    }
+
+    public @Nullable String getCurrentReadingBookId() {
+        String value = normalizeNullableText(state.currentReadingBookId);
+        if (value == null) {
+            return null;
+        }
+        if (!containsBookId(getBooks(), value)) {
+            return null;
+        }
+        return value;
+    }
+
+    public void setCurrentReadingBookId(@Nullable String bookId) {
+        String normalized = normalizeNullableText(bookId);
+        if (normalized != null && !containsBookId(getBooks(), normalized)) {
+            normalized = null;
+        }
+        if (Objects.equals(getCurrentReadingBookId(), normalized)) {
+            return;
+        }
+        state.currentReadingBookId = normalized;
+        ApplicationManager.getApplication()
+                .getMessageBus()
+                .syncPublisher(PdfViewerSettingsListener.TOPIC)
+                .currentReadingBookChanged(normalized);
+    }
+
+    public int getBookReadLine(@Nullable String bookId) {
+        String normalized = normalizeNullableText(bookId);
+        if (normalized == null) {
+            return 1;
+        }
+        Map<String, Integer> map = state.bookReadLineById;
+        if (map == null || map.isEmpty()) {
+            return 1;
+        }
+        Integer value = map.get(normalized);
+        return value == null ? 1 : Math.max(1, value);
+    }
+
+    public void setBookReadLine(@NotNull String bookId, int lineNumber) {
+        String normalizedBookId = normalizeNullableText(bookId);
+        if (normalizedBookId == null) {
+            return;
+        }
+        if (!containsBookId(getBooks(), normalizedBookId)) {
+            return;
+        }
+        int normalizedLine = Math.max(1, lineNumber);
+        if (getBookReadLine(normalizedBookId) == normalizedLine) {
+            return;
+        }
+        if (state.bookReadLineById == null) {
+            state.bookReadLineById = new LinkedHashMap<>();
+        }
+        state.bookReadLineById.put(normalizedBookId, normalizedLine);
+        ApplicationManager.getApplication()
+                .getMessageBus()
+                .syncPublisher(PdfViewerSettingsListener.TOPIC)
+                .bookReadPositionChanged(normalizedBookId, normalizedLine);
+    }
+
     private static @Nullable String normalizePdfPathKey(@Nullable String pdfPath) {
         if (pdfPath == null) {
             return null;
         }
         String trimmed = pdfPath.trim();
         return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    private void normalizeStateAfterLoad() {
+        List<BookData> normalizedBooks = normalizeBookLibrary(state.books);
+        state.books = normalizedBooks.isEmpty() ? null : normalizedBooks;
+
+        if (state.bookReadLineById != null && !state.bookReadLineById.isEmpty()) {
+            LinkedHashMap<String, Integer> normalizedMap = new LinkedHashMap<>();
+            for (Map.Entry<String, Integer> entry : state.bookReadLineById.entrySet()) {
+                String bookId = normalizeNullableText(entry.getKey());
+                if (bookId == null || !containsBookId(normalizedBooks, bookId)) {
+                    continue;
+                }
+                Integer lineNumber = entry.getValue();
+                int normalizedLine = lineNumber == null ? 1 : Math.max(1, lineNumber);
+                normalizedMap.put(bookId, normalizedLine);
+            }
+            state.bookReadLineById = normalizedMap.isEmpty() ? null : normalizedMap;
+        }
+
+        String currentBookId = normalizeNullableText(state.currentReadingBookId);
+        if (currentBookId != null && !containsBookId(normalizedBooks, currentBookId)) {
+            state.currentReadingBookId = null;
+        }
+    }
+
+    private static @NotNull List<BookData> normalizeBookLibrary(@Nullable List<BookData> books) {
+        if (books == null || books.isEmpty()) {
+            return List.of();
+        }
+        LinkedHashMap<String, BookData> uniqueById = new LinkedHashMap<>();
+        List<BookData> normalizedList = new ArrayList<>();
+        for (BookData book : books) {
+            if (book == null) {
+                continue;
+            }
+            String id = normalizeNullableText(book.id);
+            if (id == null) {
+                id = UUID.randomUUID().toString();
+            }
+            if (uniqueById.containsKey(id)) {
+                continue;
+            }
+            String name = normalizeNullableText(book.name);
+            if (name == null) {
+                continue;
+            }
+            String uniqueName = resolveUniqueBookName(normalizedList, name);
+            BookData copy = new BookData();
+            copy.id = id;
+            copy.name = uniqueName;
+            copy.sourceType = normalizeBookSourceType(book.sourceType);
+            copy.filePath = normalizeNullableText(book.filePath);
+            copy.inlineContent = book.inlineContent;
+            copy.createdAtEpochMillis = book.createdAtEpochMillis;
+            uniqueById.put(id, copy);
+            normalizedList.add(copy);
+        }
+        return normalizedList.isEmpty() ? List.of() : normalizedList;
+    }
+
+    private static @NotNull String normalizeBookSourceType(@Nullable String value) {
+        if (value == null || value.isBlank()) {
+            return BOOK_SOURCE_MANUAL;
+        }
+        String normalized = value.trim().toLowerCase(Locale.ROOT);
+        if ("导入".equals(normalized) || "import".equals(normalized)) {
+            return BOOK_SOURCE_IMPORT;
+        }
+        if ("手动".equals(normalized) || "manual".equals(normalized)) {
+            return BOOK_SOURCE_MANUAL;
+        }
+        return BOOK_SOURCE_MANUAL;
+    }
+
+    private static boolean containsBookId(@NotNull List<BookData> books, @NotNull String bookId) {
+        for (BookData book : books) {
+            if (book == null || book.id == null) {
+                continue;
+            }
+            if (bookId.equals(book.id)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static @NotNull String resolveUniqueBookName(@NotNull List<BookData> existingBooks, @NotNull String desiredName) {
+        String base = desiredName.trim();
+        if (!containsBookName(existingBooks, base)) {
+            return base;
+        }
+        int index = 2;
+        while (true) {
+            String candidate = base + " (" + index + ")";
+            if (!containsBookName(existingBooks, candidate)) {
+                return candidate;
+            }
+            index++;
+        }
+    }
+
+    private static boolean containsBookName(@NotNull List<BookData> existingBooks, @NotNull String name) {
+        String target = name.trim().toLowerCase(Locale.ROOT);
+        for (BookData existing : existingBooks) {
+            if (existing == null || existing.name == null) {
+                continue;
+            }
+            String current = existing.name.trim().toLowerCase(Locale.ROOT);
+            if (current.equals(target)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean areBookLibrariesEqual(@NotNull List<BookData> left, @NotNull List<BookData> right) {
+        if (left.size() != right.size()) {
+            return false;
+        }
+        for (int i = 0; i < left.size(); i++) {
+            BookData a = left.get(i);
+            BookData b = right.get(i);
+            if (!areBooksEqual(a, b)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static boolean areBooksEqual(@Nullable BookData a, @Nullable BookData b) {
+        if (a == b) {
+            return true;
+        }
+        if (a == null || b == null) {
+            return false;
+        }
+        return Objects.equals(a.id, b.id)
+                && Objects.equals(a.name, b.name)
+                && Objects.equals(a.sourceType, b.sourceType)
+                && Objects.equals(a.filePath, b.filePath)
+                && Objects.equals(a.inlineContent, b.inlineContent)
+                && Objects.equals(a.createdAtEpochMillis, b.createdAtEpochMillis);
     }
 
     private static @Nullable String normalizeWordKey(@Nullable String word) {
@@ -1304,5 +1736,14 @@ public final class PdfViewerSettings implements PersistentStateComponent<PdfView
 
     private static int clampColorChannel(int value) {
         return Math.max(0, Math.min(255, value));
+    }
+
+    private static @Nullable String safeReadTextFile(@NotNull String filePath) {
+        try {
+            byte[] bytes = Files.readAllBytes(Paths.get(filePath));
+            return new String(bytes, StandardCharsets.UTF_8);
+        } catch (Exception ignored) {
+            return null;
+        }
     }
 }

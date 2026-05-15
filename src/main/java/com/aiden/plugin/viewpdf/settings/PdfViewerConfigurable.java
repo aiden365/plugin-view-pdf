@@ -32,6 +32,7 @@ import java.util.Locale;
 public final class PdfViewerConfigurable implements Configurable {
     private JPanel panel;
     private TextFieldWithBrowseButton pdfPathField;
+    private JComboBox<ReadingBookOption> currentReadingBookComboBox;
     private JSpinner bgRSpinner;
     private JSpinner bgGSpinner;
     private JSpinner bgBSpinner;
@@ -126,6 +127,15 @@ public final class PdfViewerConfigurable implements Configurable {
                     updatePdfPathFieldWidth();
                 }
             });
+
+            JPanel currentReadingBookPanel = createRowPanel();
+            currentReadingBookPanel.add(new JLabel("当前阅读图书"));
+            currentReadingBookComboBox = new JComboBox<>();
+            currentReadingBookComboBox.setPreferredSize(new Dimension(360, currentReadingBookComboBox.getPreferredSize().height));
+            currentReadingBookComboBox.setMaximumSize(new Dimension(Integer.MAX_VALUE, currentReadingBookComboBox.getPreferredSize().height));
+            currentReadingBookPanel.add(currentReadingBookComboBox);
+            panel.add(currentReadingBookPanel);
+            panel.add(Box.createVerticalStrut(4));
 
             JPanel bgPanel = createRowPanel();
             bgPanel.add(new JLabel("PDF 背景色 (RGB)"));
@@ -413,6 +423,14 @@ public final class PdfViewerConfigurable implements Configurable {
         }
 
         PdfViewerSettings settings = PdfViewerSettings.getInstance();
+        ReadingBookOption selectedReadingBook = currentReadingBookComboBox == null
+                ? null
+                : (ReadingBookOption) currentReadingBookComboBox.getSelectedItem();
+        String selectedBookId = selectedReadingBook == null ? null : selectedReadingBook.bookId;
+        if (!safeText(settings.getCurrentReadingBookId()).equals(safeText(selectedBookId))) {
+            return true;
+        }
+
         int r = (int) bgRSpinner.getValue();
         int g = (int) bgGSpinner.getValue();
         int b = (int) bgBSpinner.getValue();
@@ -542,6 +560,8 @@ public final class PdfViewerConfigurable implements Configurable {
     public void apply() {
         PdfViewerSettings settings = PdfViewerSettings.getInstance();
         settings.setPdfPath(pdfPathField.getText());
+        ReadingBookOption selectedReadingBook = (ReadingBookOption) currentReadingBookComboBox.getSelectedItem();
+        settings.setCurrentReadingBookId(selectedReadingBook == null ? null : selectedReadingBook.bookId);
         settings.setPdfBackgroundRgb((int) bgRSpinner.getValue(), (int) bgGSpinner.getValue(), (int) bgBSpinner.getValue());
         settings.setPdfTextRgb((int) textRSpinner.getValue(), (int) textGSpinner.getValue(), (int) textBSpinner.getValue());
         settings.setTreeBackgroundRgb((int) treeBgRSpinner.getValue(), (int) treeBgGSpinner.getValue(), (int) treeBgBSpinner.getValue());
@@ -603,6 +623,7 @@ public final class PdfViewerConfigurable implements Configurable {
         PdfViewerSettings settings = PdfViewerSettings.getInstance();
         String value = settings.getPdfPath();
         pdfPathField.setText(value == null ? "" : value);
+        refreshReadingBookOptions(settings.getCurrentReadingBookId());
 
         bgRSpinner.setValue(settings.getPdfBackgroundR());
         bgGSpinner.setValue(settings.getPdfBackgroundG());
@@ -657,6 +678,7 @@ public final class PdfViewerConfigurable implements Configurable {
     public void disposeUIResources() {
         panel = null;
         pdfPathField = null;
+        currentReadingBookComboBox = null;
         bgRSpinner = null;
         bgGSpinner = null;
         bgBSpinner = null;
@@ -778,6 +800,35 @@ public final class PdfViewerConfigurable implements Configurable {
         }
     }
 
+    private void refreshReadingBookOptions(@Nullable String selectedBookId) {
+        if (currentReadingBookComboBox == null) {
+            return;
+        }
+        List<ReadingBookOption> options = new ArrayList<>();
+        options.add(new ReadingBookOption(null, "（不选择）"));
+        PdfViewerSettings settings = PdfViewerSettings.getInstance();
+        for (PdfViewerSettings.BookData book : settings.getBooks()) {
+            if (book == null || book.id == null || book.name == null) {
+                continue;
+            }
+            options.add(new ReadingBookOption(book.id, book.name));
+        }
+        currentReadingBookComboBox.removeAllItems();
+        ReadingBookOption selected = null;
+        for (ReadingBookOption option : options) {
+            currentReadingBookComboBox.addItem(option);
+            if (selected == null && safeText(option.bookId).equals(safeText(selectedBookId))) {
+                selected = option;
+            }
+        }
+        if (selected == null && currentReadingBookComboBox.getItemCount() > 0) {
+            selected = currentReadingBookComboBox.getItemAt(0);
+        }
+        if (selected != null) {
+            currentReadingBookComboBox.setSelectedItem(selected);
+        }
+    }
+
     private static boolean containsBookName(List<PdfViewerSettings.CustomVocabularyBookData> books, String name) {
         String target = name.trim().toLowerCase(Locale.ROOT);
         for (PdfViewerSettings.CustomVocabularyBookData book : books) {
@@ -836,6 +887,21 @@ public final class PdfViewerConfigurable implements Configurable {
 
         private VocabularyBookOption(String key, String label) {
             this.key = key;
+            this.label = label;
+        }
+
+        @Override
+        public String toString() {
+            return label;
+        }
+    }
+
+    private static final class ReadingBookOption {
+        private final String bookId;
+        private final String label;
+
+        private ReadingBookOption(String bookId, String label) {
+            this.bookId = bookId;
             this.label = label;
         }
 

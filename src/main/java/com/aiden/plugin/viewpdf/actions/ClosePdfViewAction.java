@@ -10,6 +10,8 @@ import com.intellij.openapi.project.DumbAware;
 import com.intellij.openapi.project.Project;
 import org.jetbrains.annotations.NotNull;
 
+import java.util.Date;
+
 public final class ClosePdfViewAction extends AnAction implements DumbAware {
     @Override
     public void actionPerformed(@NotNull AnActionEvent e) {
@@ -17,6 +19,8 @@ public final class ClosePdfViewAction extends AnAction implements DumbAware {
         if (project == null) {
             return;
         }
+
+
         PdfViewerToolWindowController controller = project.getUserData(PdfViewerKeys.CONTROLLER_KEY);
         if (controller == null) {
             return;

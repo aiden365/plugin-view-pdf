@@ -193,36 +193,7 @@ public final class WordLibraryLoader {
     }
 
     private static @NotNull List<PdfViewerSettings.WordEntryData> loadMasteredEntries(@NotNull PdfViewerSettings settings) {
-        LinkedHashMap<String, PdfViewerSettings.WordEntryData> all = new LinkedHashMap<>();
-        for (String builtinBook : BUILTIN_VOCABULARY_BOOKS) {
-            for (PdfViewerSettings.WordEntryData entry : loadVocabularyBookEntries(builtinBook)) {
-                String key = normalizeWordKey(entry.word);
-                if (key != null) {
-                    all.putIfAbsent(key, entry);
-                }
-            }
-        }
-        for (PdfViewerSettings.CustomVocabularyBookData book : settings.getCustomVocabularyBooks()) {
-            if (book == null || book.name == null || book.jsonlPath == null) {
-                continue;
-            }
-            for (PdfViewerSettings.WordEntryData entry : loadCustomJsonlEntries(book.name, book.jsonlPath)) {
-                String key = normalizeWordKey(entry.word);
-                if (key != null) {
-                    all.put(key, entry);
-                }
-            }
-        }
-        List<PdfViewerSettings.WordEntryData> mastered = new ArrayList<>();
-        for (PdfViewerSettings.WordEntryData entry : all.values()) {
-            if (entry.word == null) {
-                continue;
-            }
-            if (settings.isWordMastered(entry.word)) {
-                mastered.add(entry);
-            }
-        }
-        return mastered;
+        return MasteredWordLibrary.loadAll();
     }
 
     private static @NotNull List<PdfViewerSettings.WordEntryData> loadCustomJsonlEntries(

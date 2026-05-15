@@ -70,6 +70,21 @@ public interface PdfViewerSettingsListener {
     default void wordManagerPaneWidthPercentChanged(int percent) {
     }
 
+    default void bookManagerPaneVisibilityChanged(boolean visible) {
+    }
+
     default void wordHiddenStateChanged(@NotNull String bookKey) {
+    }
+
+    default void masteredWordLibraryChanged() {
+    }
+
+    default void bookLibraryChanged() {
+    }
+
+    default void currentReadingBookChanged(@Nullable String bookId) {
+    }
+
+    default void bookReadPositionChanged(@NotNull String bookId, int lineNumber) {
     }
 }
