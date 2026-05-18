@@ -18,6 +18,7 @@ repositories {
 // Read more: https://plugins.jetbrains.com/docs/intellij/tools-intellij-platform-gradle-plugin.html
 dependencies {
     implementation("org.apache.pdfbox:pdfbox:3.0.2")
+    testImplementation("junit:junit:4.13.2")
 
     intellijPlatform {
         create("IC", "2025.1")

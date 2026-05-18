@@ -187,6 +187,7 @@ public final class PdfViewerToolWindowFactory implements ToolWindowFactory, Dumb
         bookManagerPanel.getComponent().setVisible(settings.isBookManagerPaneVisible());
         toolWindow.setTitleActions(List.of(
                 new ToggleThirdPaneAction(splitPanel),
+                new ToggleSwatchAction(splitPanel),
                 new ToggleBookManagerPaneAction(),
                 new ToggleWordManagerPaneAction(),
                 new ToggleDisguiseAction(project, splitPanel)

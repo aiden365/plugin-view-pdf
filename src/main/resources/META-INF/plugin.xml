@@ -25,6 +25,8 @@
          Read more: https://plugins.jetbrains.com/docs/intellij/plugin-extension-points.html -->
     <extensions defaultExtensionNs="com.intellij">
         <applicationService serviceImplementation="com.aiden.plugin.viewpdf.settings.PdfViewerSettings"/>
+        <applicationService serviceImplementation="com.aiden.plugin.viewpdf.stockwatcher.StockWatcherSettings"/>
+        <projectService serviceImplementation="com.aiden.plugin.viewpdf.editorlookup.EditorWordLookupSession"/>
 
         <applicationConfigurable
                 id="com.aiden.plugin.viewpdf.settings"
@@ -34,7 +36,8 @@
         <postStartupActivity implementation="com.aiden.plugin.viewpdf.settings.WordLibraryStartupActivity"/>
         <postStartupActivity implementation="com.aiden.plugin.viewpdf.bookreading.BookReadingStartupActivity"/>
 
-        <notificationGroup id="XTools.BookReading" displayType="TOOL_WINDOW" isLogByDefault="true"/>
+        <notificationGroup id="XTools.BookReading" displayType="NONE" isLogByDefault="true"/>
+        <notificationGroup id="XTools.StockWatcher" displayType="BALLOON" isLogByDefault="true"/>
 
         <toolWindow
                 id="XTools"
@@ -85,6 +88,15 @@
                 text="显示/隐藏单词悬浮框"
                 description="显示或隐藏背单词悬浮框">
             <keyboard-shortcut keymap="$default" first-keystroke="ctrl alt W"/>
+            <add-to-group group-id="ToolsMenu" anchor="last"/>
+        </action>
+
+        <action
+                id="com.aiden.plugin.viewpdf.actions.ShowEditorWordLookup"
+                class="com.aiden.plugin.viewpdf.actions.ShowEditorWordLookupAction"
+                text="编辑器 Lookup 背单词"
+                description="在编辑器光标处通过 Lookup 背单词">
+            <keyboard-shortcut keymap="$default" first-keystroke="ctrl alt shift W"/>
             <add-to-group group-id="ToolsMenu" anchor="last"/>
         </action>
 

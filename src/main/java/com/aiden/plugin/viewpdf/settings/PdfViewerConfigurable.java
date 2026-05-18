@@ -1,11 +1,14 @@
 package com.aiden.plugin.viewpdf.settings;
 
+import com.aiden.plugin.viewpdf.stockwatcher.StockWatcherColumn;
+import com.aiden.plugin.viewpdf.stockwatcher.StockWatcherSettings;
 import com.intellij.openapi.fileChooser.FileChooserDescriptor;
 import com.intellij.openapi.options.Configurable;
 import com.intellij.openapi.ui.TextBrowseFolderListener;
 import com.intellij.openapi.ui.TextFieldWithBrowseButton;
 import com.intellij.openapi.vfs.VirtualFile;
 import org.jetbrains.annotations.Nls;
+import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import javax.swing.JComponent;
@@ -21,13 +24,22 @@ import javax.swing.SpinnerNumberModel;
 import javax.swing.BorderFactory;
 import javax.swing.Box;
 import javax.swing.BoxLayout;
+import javax.swing.JScrollPane;
+import javax.swing.JPopupMenu;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
+import java.awt.Color;
+import java.awt.BorderLayout;
 import java.awt.event.ComponentAdapter;
 import java.awt.event.ComponentEvent;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 
 public final class PdfViewerConfigurable implements Configurable {
     private JPanel panel;
@@ -72,6 +84,8 @@ public final class PdfViewerConfigurable implements Configurable {
     private JSpinner wordPopupFontGSpinner;
     private JSpinner wordPopupFontBSpinner;
     private JSpinner wordPopupOpacitySpinner;
+    private JSpinner editorWordPopupBackgroundOpacitySpinner;
+    private JSpinner editorWordPopupTextOpacitySpinner;
     private JCheckBox wordPopupShowMeaningCheckBox;
     private JCheckBox wordPopupShowSentenceCheckBox;
     private JCheckBox wordPopupShowSynonymsCheckBox;
@@ -81,6 +95,11 @@ public final class PdfViewerConfigurable implements Configurable {
     private TextFieldWithBrowseButton customBookPathField;
     private JButton addCustomBookButton;
     private List<PdfViewerSettings.CustomVocabularyBookData> uiCustomVocabularyBooks = new ArrayList<>();
+    private JTextField stockCodesField;
+    private JLabel stockCodesErrorLabel;
+    private MultiSelectDropdown visibleColumnsDropdown;
+    private JSpinner refreshIntervalSecondsSpinner;
+    private JSpinner cooldownMinutesSpinner;
 
     @Override
     public @Nls(capitalization = Nls.Capitalization.Title) String getDisplayName() {
@@ -340,6 +359,20 @@ public final class PdfViewerConfigurable implements Configurable {
             panel.add(wordPopupOpacityPanel);
             panel.add(Box.createVerticalStrut(10));
 
+            JPanel editorWordPopupBackgroundOpacityPanel = createRowPanel();
+            editorWordPopupBackgroundOpacityPanel.add(new JLabel("编辑器背单词弹框背景透明度（%）"));
+            editorWordPopupBackgroundOpacitySpinner = new JSpinner(new SpinnerNumberModel(100, 10, 100, 1));
+            editorWordPopupBackgroundOpacityPanel.add(editorWordPopupBackgroundOpacitySpinner);
+            panel.add(editorWordPopupBackgroundOpacityPanel);
+            panel.add(Box.createVerticalStrut(4));
+
+            JPanel editorWordPopupTextOpacityPanel = createRowPanel();
+            editorWordPopupTextOpacityPanel.add(new JLabel("编辑器背单词弹框文字透明度（%）"));
+            editorWordPopupTextOpacitySpinner = new JSpinner(new SpinnerNumberModel(100, 10, 100, 1));
+            editorWordPopupTextOpacityPanel.add(editorWordPopupTextOpacitySpinner);
+            panel.add(editorWordPopupTextOpacityPanel);
+            panel.add(Box.createVerticalStrut(10));
+
             JPanel showMeaningPanel = createRowPanel();
             showMeaningPanel.add(new JLabel("显示释义"));
             wordPopupShowMeaningCheckBox = new JCheckBox();
@@ -407,6 +440,67 @@ public final class PdfViewerConfigurable implements Configurable {
             addCustomBookButton.addActionListener(e -> addCustomBook());
             addBookPanel.add(addCustomBookButton);
             panel.add(addBookPanel);
+            panel.add(Box.createVerticalStrut(12));
+
+            JPanel stockTitlePanel = createRowPanel();
+            stockTitlePanel.add(new JLabel("股票监控"));
+            panel.add(stockTitlePanel);
+            panel.add(Box.createVerticalStrut(4));
+
+            JPanel stockCodesPanel = createRowPanel();
+            stockCodesPanel.add(new JLabel("自选股票（逗号分隔）"));
+            stockCodesField = new JTextField();
+            stockCodesField.setPreferredSize(new Dimension(360, stockCodesField.getPreferredSize().height));
+            stockCodesField.setMaximumSize(new Dimension(Integer.MAX_VALUE, stockCodesField.getPreferredSize().height));
+            stockCodesPanel.add(stockCodesField);
+            panel.add(stockCodesPanel);
+
+            JPanel stockCodesErrorPanel = createRowPanel();
+            stockCodesErrorLabel = new JLabel("");
+            stockCodesErrorLabel.setForeground(new Color(215, 80, 80));
+            stockCodesErrorPanel.add(stockCodesErrorLabel);
+            panel.add(stockCodesErrorPanel);
+            panel.add(Box.createVerticalStrut(4));
+
+            stockCodesField.getDocument().addDocumentListener(new javax.swing.event.DocumentListener() {
+                @Override
+                public void insertUpdate(javax.swing.event.DocumentEvent e) {
+                    updateStockCodesErrorLabelFromText();
+                }
+
+                @Override
+                public void removeUpdate(javax.swing.event.DocumentEvent e) {
+                    updateStockCodesErrorLabelFromText();
+                }
+
+                @Override
+                public void changedUpdate(javax.swing.event.DocumentEvent e) {
+                    updateStockCodesErrorLabelFromText();
+                }
+            });
+
+            JPanel visibleColumnsPanel = createRowPanel();
+            visibleColumnsPanel.add(new JLabel("行情列"));
+            visibleColumnsDropdown = new MultiSelectDropdown(
+                    StockWatcherColumn.getKeyToLabelMap(),
+                    StockWatcherColumn.getDefaultVisibleKeys()
+            );
+            visibleColumnsPanel.add(visibleColumnsDropdown);
+            panel.add(visibleColumnsPanel);
+            panel.add(Box.createVerticalStrut(4));
+
+            JPanel refreshIntervalPanel = createRowPanel();
+            refreshIntervalPanel.add(new JLabel("刷新间隔（秒）"));
+            refreshIntervalSecondsSpinner = new JSpinner(new SpinnerNumberModel(5, 1, 3600, 1));
+            refreshIntervalPanel.add(refreshIntervalSecondsSpinner);
+            panel.add(refreshIntervalPanel);
+            panel.add(Box.createVerticalStrut(4));
+
+            JPanel cooldownPanel = createRowPanel();
+            cooldownPanel.add(new JLabel("通知冷却期（分钟）"));
+            cooldownMinutesSpinner = new JSpinner(new SpinnerNumberModel(5, 0, 1440, 1));
+            cooldownPanel.add(cooldownMinutesSpinner);
+            panel.add(cooldownPanel);
         }
         reset();
         updatePdfPathFieldWidth();
@@ -538,6 +632,14 @@ public final class PdfViewerConfigurable implements Configurable {
         if (settings.getWordPopupOpacityPercent() != wordPopupOpacity) {
             return true;
         }
+        int editorWordPopupBackgroundOpacity = (int) editorWordPopupBackgroundOpacitySpinner.getValue();
+        if (settings.getEditorWordPopupBackgroundOpacityPercent() != editorWordPopupBackgroundOpacity) {
+            return true;
+        }
+        int editorWordPopupTextOpacity = (int) editorWordPopupTextOpacitySpinner.getValue();
+        if (settings.getEditorWordPopupTextOpacityPercent() != editorWordPopupTextOpacity) {
+            return true;
+        }
         if (settings.isWordPopupShowMeaning() != wordPopupShowMeaningCheckBox.isSelected()
                 || settings.isWordPopupShowSentence() != wordPopupShowSentenceCheckBox.isSelected()
                 || settings.isWordPopupShowSynonyms() != wordPopupShowSynonymsCheckBox.isSelected()
@@ -551,6 +653,25 @@ public final class PdfViewerConfigurable implements Configurable {
             return true;
         }
         if (!sameCustomBooks(settings.getCustomVocabularyBooks(), uiCustomVocabularyBooks)) {
+            return true;
+        }
+
+        StockWatcherSettings stockSettings = StockWatcherSettings.getInstance();
+        String stockUiText = stockCodesField == null ? "" : stockCodesField.getText();
+        String normalizedStockUiText = StockWatcherSettings.normalizeStocksInput(stockUiText).normalizedText;
+        if (!stockSettings.getStocks().equals(normalizedStockUiText)) {
+            return true;
+        }
+        List<String> uiVisibleColumns = visibleColumnsDropdown == null ? List.of() : visibleColumnsDropdown.getSelectedKeys();
+        if (!stockSettings.getVisibleColumns().equals(uiVisibleColumns)) {
+            return true;
+        }
+        int refreshIntervalSeconds = refreshIntervalSecondsSpinner == null ? 5 : (int) refreshIntervalSecondsSpinner.getValue();
+        if (stockSettings.getRefreshIntervalSeconds() != refreshIntervalSeconds) {
+            return true;
+        }
+        int cooldownMinutes = cooldownMinutesSpinner == null ? 5 : (int) cooldownMinutesSpinner.getValue();
+        if (stockSettings.getCooldownMinutes() != cooldownMinutes) {
             return true;
         }
         return false;
@@ -603,6 +724,8 @@ public final class PdfViewerConfigurable implements Configurable {
                 (int) wordPopupFontBSpinner.getValue()
         );
         settings.setWordPopupOpacityPercent((int) wordPopupOpacitySpinner.getValue());
+        settings.setEditorWordPopupBackgroundOpacityPercent((int) editorWordPopupBackgroundOpacitySpinner.getValue());
+        settings.setEditorWordPopupTextOpacityPercent((int) editorWordPopupTextOpacitySpinner.getValue());
         settings.setWordPopupContentDisplay(
                 wordPopupShowMeaningCheckBox.isSelected(),
                 wordPopupShowSentenceCheckBox.isSelected(),
@@ -613,6 +736,20 @@ public final class PdfViewerConfigurable implements Configurable {
         VocabularyBookOption selectedBook = (VocabularyBookOption) vocabularyBookComboBox.getSelectedItem();
         settings.setSelectedVocabularyBookKey(selectedBook == null ? null : selectedBook.key);
         WordLibraryLoader.reloadWordEntriesFromSettings(settings);
+
+        StockWatcherSettings stockSettings = StockWatcherSettings.getInstance();
+        stockSettings.setStocks(stockCodesField == null ? null : stockCodesField.getText());
+        if (stockCodesField != null) {
+            stockCodesField.setText(stockSettings.getStocks());
+        }
+        stockSettings.setVisibleColumns(visibleColumnsDropdown == null ? List.of() : visibleColumnsDropdown.getSelectedKeys());
+        if (refreshIntervalSecondsSpinner != null) {
+            stockSettings.setRefreshIntervalSeconds((int) refreshIntervalSecondsSpinner.getValue());
+        }
+        if (cooldownMinutesSpinner != null) {
+            stockSettings.setCooldownMinutes((int) cooldownMinutesSpinner.getValue());
+        }
+        updateStockCodesErrorLabelFromSettings();
     }
 
     @Override
@@ -664,6 +801,8 @@ public final class PdfViewerConfigurable implements Configurable {
         wordPopupFontGSpinner.setValue(settings.getWordPopupFontG());
         wordPopupFontBSpinner.setValue(settings.getWordPopupFontB());
         wordPopupOpacitySpinner.setValue(settings.getWordPopupOpacityPercent());
+        editorWordPopupBackgroundOpacitySpinner.setValue(settings.getEditorWordPopupBackgroundOpacityPercent());
+        editorWordPopupTextOpacitySpinner.setValue(settings.getEditorWordPopupTextOpacityPercent());
         wordPopupShowMeaningCheckBox.setSelected(settings.isWordPopupShowMeaning());
         wordPopupShowSentenceCheckBox.setSelected(settings.isWordPopupShowSentence());
         wordPopupShowSynonymsCheckBox.setSelected(settings.isWordPopupShowSynonyms());
@@ -672,6 +811,21 @@ public final class PdfViewerConfigurable implements Configurable {
         refreshVocabularyBookOptions(settings.getSelectedVocabularyBookKey());
         customBookNameField.setText("");
         customBookPathField.setText("");
+
+        StockWatcherSettings stockSettings = StockWatcherSettings.getInstance();
+        if (stockCodesField != null) {
+            stockCodesField.setText(stockSettings.getStocks());
+        }
+        if (visibleColumnsDropdown != null) {
+            visibleColumnsDropdown.setSelectedKeys(stockSettings.getVisibleColumns());
+        }
+        if (refreshIntervalSecondsSpinner != null) {
+            refreshIntervalSecondsSpinner.setValue(stockSettings.getRefreshIntervalSeconds());
+        }
+        if (cooldownMinutesSpinner != null) {
+            cooldownMinutesSpinner.setValue(stockSettings.getCooldownMinutes());
+        }
+        updateStockCodesErrorLabelFromSettings();
     }
 
     @Override
@@ -718,6 +872,8 @@ public final class PdfViewerConfigurable implements Configurable {
         wordPopupFontGSpinner = null;
         wordPopupFontBSpinner = null;
         wordPopupOpacitySpinner = null;
+        editorWordPopupBackgroundOpacitySpinner = null;
+        editorWordPopupTextOpacitySpinner = null;
         wordPopupShowMeaningCheckBox = null;
         wordPopupShowSentenceCheckBox = null;
         wordPopupShowSynonymsCheckBox = null;
@@ -727,6 +883,11 @@ public final class PdfViewerConfigurable implements Configurable {
         customBookPathField = null;
         addCustomBookButton = null;
         uiCustomVocabularyBooks = new ArrayList<>();
+        stockCodesField = null;
+        stockCodesErrorLabel = null;
+        visibleColumnsDropdown = null;
+        refreshIntervalSecondsSpinner = null;
+        cooldownMinutesSpinner = null;
     }
 
     private static JPanel createRowPanel() {
@@ -927,7 +1088,142 @@ public final class PdfViewerConfigurable implements Configurable {
         pdfPathField.revalidate();
     }
 
-    public static void main(String[] args) {
-        //
+    private void updateStockCodesErrorLabelFromSettings() {
+        if (stockCodesErrorLabel == null) {
+            return;
+        }
+        List<String> invalid = StockWatcherSettings.getInstance().getInvalidStockCodes();
+        if (invalid.isEmpty()) {
+            stockCodesErrorLabel.setText("");
+            return;
+        }
+        stockCodesErrorLabel.setText("无效 code: " + String.join(", ", invalid));
+    }
+
+    private void updateStockCodesErrorLabelFromText() {
+        if (stockCodesErrorLabel == null || stockCodesField == null) {
+            return;
+        }
+        StockWatcherSettings.NormalizedStocks normalized = StockWatcherSettings.normalizeStocksInput(stockCodesField.getText());
+        if (normalized.codes.isEmpty()) {
+            stockCodesErrorLabel.setText("");
+            return;
+        }
+        List<String> invalid = new ArrayList<>();
+        for (String code : normalized.codes) {
+            if (!StockWatcherSettings.isValidStockCode(code)) {
+                invalid.add(code);
+            }
+        }
+        if (invalid.isEmpty()) {
+            stockCodesErrorLabel.setText("");
+            return;
+        }
+        stockCodesErrorLabel.setText("无效 code: " + String.join(", ", invalid));
+    }
+
+    private static final class MultiSelectDropdown extends JPanel {
+        private final JTextField displayField;
+        private final JButton button;
+        private final LinkedHashMap<String, String> options;
+        private final LinkedHashSet<String> mandatoryKeys;
+        private final LinkedHashSet<String> selectedKeys = new LinkedHashSet<>();
+
+        private MultiSelectDropdown(@NotNull Map<String, String> keyToLabel, @NotNull List<String> mandatoryKeys) {
+            this.options = new LinkedHashMap<>(keyToLabel);
+            this.mandatoryKeys = new LinkedHashSet<>(mandatoryKeys);
+            setLayout(new BorderLayout(4, 0));
+            displayField = new JTextField();
+            displayField.setEditable(false);
+            displayField.setPreferredSize(new Dimension(360, displayField.getPreferredSize().height));
+            displayField.setMaximumSize(new Dimension(Integer.MAX_VALUE, displayField.getPreferredSize().height));
+            button = new JButton("选择");
+            add(displayField, BorderLayout.CENTER);
+            add(button, BorderLayout.EAST);
+            MouseAdapter mouseAdapter = new MouseAdapter() {
+                @Override
+                public void mousePressed(MouseEvent e) {
+                    showPopup();
+                }
+            };
+            displayField.addMouseListener(mouseAdapter);
+            button.addActionListener(e -> showPopup());
+            setSelectedKeys(StockWatcherColumn.getDefaultVisibleKeys());
+        }
+
+        public @NotNull List<String> getSelectedKeys() {
+            ensureMandatorySelected();
+            return new ArrayList<>(selectedKeys);
+        }
+
+        public void setSelectedKeys(@NotNull List<String> keys) {
+            selectedKeys.clear();
+            for (String key : keys) {
+                if (key == null) {
+                    continue;
+                }
+                String normalized = key.trim();
+                if (normalized.isEmpty()) {
+                    continue;
+                }
+                if (!options.containsKey(normalized)) {
+                    continue;
+                }
+                selectedKeys.add(normalized);
+            }
+            ensureMandatorySelected();
+            refreshDisplayText();
+        }
+
+        private void ensureMandatorySelected() {
+            for (String key : mandatoryKeys) {
+                if (key != null && !key.isBlank() && options.containsKey(key)) {
+                    selectedKeys.add(key);
+                }
+            }
+        }
+
+        private void refreshDisplayText() {
+            List<String> labels = new ArrayList<>();
+            for (String key : selectedKeys) {
+                String label = options.get(key);
+                if (label != null) {
+                    labels.add(label);
+                }
+            }
+            displayField.setText(labels.isEmpty() ? "" : String.join(", ", labels));
+        }
+
+        private void showPopup() {
+            JPopupMenu menu = new JPopupMenu();
+            JPanel listPanel = new JPanel();
+            listPanel.setLayout(new BoxLayout(listPanel, BoxLayout.Y_AXIS));
+            for (Map.Entry<String, String> entry : options.entrySet()) {
+                String key = entry.getKey();
+                String label = entry.getValue();
+                JCheckBox box = new JCheckBox(label);
+                box.setSelected(selectedKeys.contains(key));
+                if (mandatoryKeys.contains(key)) {
+                    box.setEnabled(false);
+                    box.setSelected(true);
+                } else {
+                    box.addActionListener(e -> {
+                        if (box.isSelected()) {
+                            selectedKeys.add(key);
+                        } else {
+                            selectedKeys.remove(key);
+                        }
+                        ensureMandatorySelected();
+                        refreshDisplayText();
+                    });
+                }
+                listPanel.add(box);
+            }
+            JScrollPane scrollPane = new JScrollPane(listPanel);
+            scrollPane.setPreferredSize(new Dimension(320, 240));
+            menu.setLayout(new BorderLayout());
+            menu.add(scrollPane, BorderLayout.CENTER);
+            menu.show(this, 0, getHeight());
+        }
     }
 }

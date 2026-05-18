@@ -9,14 +9,16 @@
 - Lookup 打开期间屏蔽除 ↑/↓/Enter/Esc 之外的键盘输入，避免过滤与文本插入
 - Next/Prev 通过关闭并重建 Lookup 刷新内容；Learn 仅标记已学会并保持当前单词与 Lookup 打开状态
 - 复用现有背单词数据源与持久化（PdfViewerSettings / WordLibraryLoader / MasteredWordLibrary）
-- 为复用现有“单词序列/当前索引”逻辑，补充最小必要的公共 API（不改变现有悬浮框功能表现）
+- 新功能采用独立的“编辑器 Lookup 会话”状态管理（Project 级），不复用/不依赖现有悬浮框控制器，从而尽可能降低对原有弹框模式的影响
+- 原有弹框背单词模式与现有 Actions（显示/隐藏、Next、Prev、切换已学会）保持不变
 
 ## Impact
 - Affected specs: 编辑器内背单词交互、快捷键动作体系、背单词状态持久化一致性
 - Affected code:
   - 动作注册：[plugin.xml](file:///e:/workspace/java/xcode-tools/src/main/resources/META-INF/plugin.xml)
-  - 单词序列与切词逻辑复用：[WordPopupController](file:///e:/workspace/java/xcode-tools/src/main/java/com/aiden/plugin/viewpdf/popup/WordPopupController.java)
-  - 学习状态与词库加载：[PdfViewerSettings](file:///e:/workspace/java/xcode-tools/src/main/java/com/aiden/plugin/viewpdf/settings/PdfViewerSettings.java)、[WordLibraryLoader](file:///e:/workspace/java/xcode-tools/src/main/java/com/aiden/plugin/viewpdf/settings/WordLibraryLoader.java)
+  - 编辑器 Lookup 新增实现：新增 Editor Lookup 相关 Action/会话类（新文件）
+  - 学习状态与词库加载复用：[PdfViewerSettings](file:///e:/workspace/java/xcode-tools/src/main/java/com/aiden/plugin/viewpdf/settings/PdfViewerSettings.java)、[WordLibraryLoader](file:///e:/workspace/java/xcode-tools/src/main/java/com/aiden/plugin/viewpdf/settings/WordLibraryLoader.java)
+  - 原有弹框模式不改动：[WordPopupController](file:///e:/workspace/java/xcode-tools/src/main/java/com/aiden/plugin/viewpdf/popup/WordPopupController.java)、既有 Actions 与快捷键
 
 ## ADDED Requirements
 ### Requirement: 编辑器 Lookup 背单词
@@ -75,10 +77,17 @@
 ### Requirement: 与现有功能一致性
 系统 SHALL 复用现有背单词配置、词库来源与学习状态持久化，使编辑器 Lookup 与悬浮框在“当前词库/隐藏词/已学会状态”的判断上保持一致。
 
+### Requirement: 与原有弹框模式隔离
+系统 SHALL 保留原有弹框背单词模式，新增编辑器 Lookup 功能不得改变原有弹框模式的行为与快捷键动作语义。
+
+#### Scenario: 原有弹框模式保持可用
+- **WHEN** 用户使用原有“显示/隐藏单词悬浮框”动作及其配套的 Next/Prev/切换已学会动作
+- **THEN** 行为与改动前一致
+- **AND** 编辑器 Lookup 的输入屏蔽仅在其自身 Lookup 活跃期间生效，不得影响其他时间的编辑器输入与正常补全
+
 ## MODIFIED Requirements
 ### Requirement: 背单词状态持久化一致性
 现有“已学会状态”的持久化与加载逻辑保持不变；新增编辑器 Lookup 仅作为新的交互入口，读写同一份学习状态数据。
 
 ## REMOVED Requirements
 无
-

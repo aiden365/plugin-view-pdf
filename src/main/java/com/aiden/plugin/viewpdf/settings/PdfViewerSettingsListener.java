@@ -60,6 +60,12 @@ public interface PdfViewerSettingsListener {
     default void wordPopupOpacityChanged(int percent) {
     }
 
+    default void editorWordPopupBackgroundOpacityChanged(int percent) {
+    }
+
+    default void editorWordPopupTextOpacityChanged(int percent) {
+    }
+
     void wordSourceChanged(boolean builtinEnabled, @Nullable String customPath);
 
     void wordCategoryFiltersChanged(@NotNull List<String> difficulties, @NotNull List<String> themes, @NotNull List<String> sources);

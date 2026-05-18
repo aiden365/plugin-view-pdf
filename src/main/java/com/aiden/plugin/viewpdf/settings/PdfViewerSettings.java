@@ -149,6 +149,8 @@ public final class PdfViewerSettings implements PersistentStateComponent<PdfView
         public Integer editorPopupPdfTextG;
         public Integer editorPopupPdfTextB;
         public Integer editorPopupOpacityPercent;
+        public Integer editorWordPopupBackgroundOpacityPercent;
+        public Integer editorWordPopupTextOpacityPercent;
         public Integer wordPopupWidth;
         public Integer wordPopupHeight;
         public Integer wordPopupX;
@@ -623,6 +625,46 @@ public final class PdfViewerSettings implements PersistentStateComponent<PdfView
                 .getMessageBus()
                 .syncPublisher(PdfViewerSettingsListener.TOPIC)
                 .editorPopupOpacityChanged(normalized);
+    }
+
+    public int getEditorWordPopupBackgroundOpacityPercent() {
+        Integer value = state.editorWordPopupBackgroundOpacityPercent;
+        if (value == null) {
+            return DEFAULT_POPUP_OPACITY_PERCENT;
+        }
+        return clampPopupOpacityPercent(value);
+    }
+
+    public void setEditorWordPopupBackgroundOpacityPercent(int percent) {
+        int normalized = clampPopupOpacityPercent(percent);
+        if (getEditorWordPopupBackgroundOpacityPercent() == normalized) {
+            return;
+        }
+        state.editorWordPopupBackgroundOpacityPercent = normalized;
+        ApplicationManager.getApplication()
+                .getMessageBus()
+                .syncPublisher(PdfViewerSettingsListener.TOPIC)
+                .editorWordPopupBackgroundOpacityChanged(normalized);
+    }
+
+    public int getEditorWordPopupTextOpacityPercent() {
+        Integer value = state.editorWordPopupTextOpacityPercent;
+        if (value == null) {
+            return DEFAULT_POPUP_OPACITY_PERCENT;
+        }
+        return clampPopupOpacityPercent(value);
+    }
+
+    public void setEditorWordPopupTextOpacityPercent(int percent) {
+        int normalized = clampPopupOpacityPercent(percent);
+        if (getEditorWordPopupTextOpacityPercent() == normalized) {
+            return;
+        }
+        state.editorWordPopupTextOpacityPercent = normalized;
+        ApplicationManager.getApplication()
+                .getMessageBus()
+                .syncPublisher(PdfViewerSettingsListener.TOPIC)
+                .editorWordPopupTextOpacityChanged(normalized);
     }
 
     public int getWordPopupWidth() {

@@ -1,6 +1,7 @@
 package com.aiden.plugin.viewpdf.ui;
 
 import com.aiden.plugin.viewpdf.settings.PdfViewerSettings;
+import com.aiden.plugin.viewpdf.stockwatcher.ui.StockWatcherSwatchPanel;
 import com.intellij.openapi.Disposable;
 import com.intellij.openapi.project.Project;
 import org.jetbrains.annotations.NotNull;
@@ -28,6 +29,7 @@ import java.util.Arrays;
 public final class StealthSplitPanel implements Disposable {
     private static final String CARD_DISGUISE = "disguise";
     private static final String CARD_PDF = "pdf";
+    private static final String CARD_SWATCH = "swatch";
 
     private final JSplitPane outerSplitPane;
     private final JSplitPane rightSplitPane;
@@ -40,6 +42,7 @@ public final class StealthSplitPanel implements Disposable {
     private final DisguisePanel disguisePanel;
     private final DisguisePanel fixedCodePanel;
     private final PdfViewerPanel pdfViewerPanel;
+    private final StockWatcherSwatchPanel swatchPanel;
     private final WordManagerPanel wordManagerPanel;
 
     private Color pdfBackgroundColor = new Color(43, 45, 48);
@@ -55,6 +58,7 @@ public final class StealthSplitPanel implements Disposable {
     private boolean thirdPaneVisible = true;
     private boolean wordManagerPaneVisible;
     private boolean applyingWordManagerPaneWidth;
+    private String lastNonSwatchCard = CARD_DISGUISE;
 
     public StealthSplitPanel(@NotNull Project project) {
         settings = PdfViewerSettings.getInstance();
@@ -67,11 +71,13 @@ public final class StealthSplitPanel implements Disposable {
         });
         pdfViewerPanel = new PdfViewerPanel();
         pdfViewerPanel.setDragPanEnabled(true);
+        swatchPanel = new StockWatcherSwatchPanel(project);
 
         cardLayout = new CardLayout();
         rightCards = new JPanel(cardLayout);
         rightCards.add(disguisePanel.getComponent(), CARD_DISGUISE);
         rightCards.add(pdfViewerPanel.getComponent(), CARD_PDF);
+        rightCards.add(swatchPanel.getComponent(), CARD_SWATCH);
 
         rightSplitPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, rightCards, fixedCodePanel.getComponent());
         rightSplitPane.setResizeWeight(0.6);
@@ -333,6 +339,7 @@ public final class StealthSplitPanel implements Disposable {
     }
 
     public void showPdf() {
+        lastNonSwatchCard = CARD_PDF;
         applyPdfBackground();
         pointerInsidePdfSinceShown = false;
         cardLayout.show(rightCards, CARD_PDF);
@@ -345,12 +352,43 @@ public final class StealthSplitPanel implements Disposable {
     }
 
     public void showDisguise() {
+        lastNonSwatchCard = CARD_DISGUISE;
         pdfViewerPanel.saveReadingPositionNow();
         stopHoverTimer();
         pdfLeaveWatchTimer.stop();
         cardLayout.show(rightCards, CARD_DISGUISE);
         if (onDisguiseShownCallback != null) {
             onDisguiseShownCallback.run();
+        }
+    }
+
+    public boolean isSwatchShown() {
+        return CARD_SWATCH.equals(getVisibleCard());
+    }
+
+    public void showSwatch() {
+        String current = getVisibleCard();
+        if (!CARD_SWATCH.equals(current)) {
+            lastNonSwatchCard = current;
+        }
+        pdfViewerPanel.saveReadingPositionNow();
+        stopHoverTimer();
+        pdfLeaveWatchTimer.stop();
+        swatchPanel.refreshFromSettings(false);
+        cardLayout.show(rightCards, CARD_SWATCH);
+        if (onDisguiseShownCallback != null) {
+            onDisguiseShownCallback.run();
+        }
+    }
+
+    public void hideSwatch() {
+        if (!CARD_SWATCH.equals(getVisibleCard())) {
+            return;
+        }
+        if (CARD_PDF.equals(lastNonSwatchCard)) {
+            showPdf();
+        } else {
+            showDisguise();
         }
     }
 
@@ -497,7 +535,13 @@ public final class StealthSplitPanel implements Disposable {
     private String getVisibleCard() {
         for (java.awt.Component comp : rightCards.getComponents()) {
             if (comp.isVisible()) {
-                return comp == pdfViewerPanel.getComponent() ? CARD_PDF : CARD_DISGUISE;
+                if (comp == pdfViewerPanel.getComponent()) {
+                    return CARD_PDF;
+                }
+                if (comp == swatchPanel.getComponent()) {
+                    return CARD_SWATCH;
+                }
+                return CARD_DISGUISE;
             }
         }
         return CARD_DISGUISE;
@@ -511,6 +555,7 @@ public final class StealthSplitPanel implements Disposable {
         fixedCodePanel.dispose();
         projectTreePanel.dispose();
         pdfViewerPanel.dispose();
+        swatchPanel.dispose();
         wordManagerPanel.dispose();
     }
 }

@@ -21,6 +21,10 @@ public final class ClosePdfViewAction extends AnAction implements DumbAware {
         }
 
 
+
+
+
+
         PdfViewerToolWindowController controller = project.getUserData(PdfViewerKeys.CONTROLLER_KEY);
         if (controller == null) {
             return;
