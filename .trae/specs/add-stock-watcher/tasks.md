@@ -1,0 +1,34 @@
+# Tasks
+- [x] Task 1: 增加设置项与持久化
+  - [x] 定义并落地 stocks、visibleColumns、refreshIntervalSeconds、cooldownMinutes、perStockThresholdPct 的持久化结构
+  - [x] 实现股票代码输入的清洗与校验规则，并在设置页展示错误提示
+  - [x] 实现列选择器（下拉多选）并与表格列 key 对齐
+- [x] Task 2: 新增 Swatch 栏目（底部 ToolWindow 中间栏）
+  - [x] 在底部 ToolWindow 中间栏新增 “Swatch” 栏目，默认隐藏
+  - [x] 增加 ToolWindow 顶部功能按钮用于切换 Swatch 显示/隐藏
+  - [x] 在 Swatch 栏目内创建行情表格骨架（默认列：代码、名称、操作栏）
+  - [x] 实现动态列渲染：按 visibleColumns 显示/隐藏列
+  - [x] 提供空态与“数据不可用”展示
+- [x] Task 3: 接入新浪行情拉取与解析
+  - [x] 实现批量请求拼接 list=code1,code2
+  - [x] 解析多行 `var hq_str_{code}="..."`，构建 Quote 模型
+  - [x] 处理中文编码（GBK/GB2312 兜底）与字段数量不足
+- [x] Task 4: 定时刷新与状态展示
+  - [x] 实现默认 5 秒刷新与可配置刷新间隔
+  - [x] 实现失败退避策略与恢复策略
+  - [x] 在 UI 展示 lastRefreshTime 与最近错误摘要
+- [x] Task 5: 单股阈值配置与通知触发
+  - [x] 在操作栏提供“通知”入口，支持为单股设置阈值并持久化
+  - [x] 实现触发规则：|changePct| >= threshold 且不在冷却期
+  - [x] 使用 IDEA Notifications 发送通知，内容包含必要字段
+  - [x] 实现冷却期（默认 5 分钟、可配置、按 code 去重），冷却状态不持久化
+- [x] Task 6: 验证与回归
+  - [x] 补充必要的单元测试/解析测试（如项目具备测试框架）
+  - [x] 手动验证关键验收用例：配置持久化、列切换、刷新、通知与冷却期
+
+# Task Dependencies
+- Task 2 依赖 Task 1
+- Task 3 依赖 Task 1
+- Task 4 依赖 Task 2 与 Task 3
+- Task 5 依赖 Task 2 与 Task 4
+- Task 6 依赖 Task 1-5
