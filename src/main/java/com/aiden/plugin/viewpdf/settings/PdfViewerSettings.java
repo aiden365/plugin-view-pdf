@@ -52,6 +52,16 @@ public final class PdfViewerSettings implements PersistentStateComponent<PdfView
     private static final int DEFAULT_RENDER_BATCH_PAGE_COUNT = 50;
     private static final int DEFAULT_EDITOR_POPUP_WIDTH = 760;
     private static final int DEFAULT_EDITOR_POPUP_HEIGHT = 520;
+    private static final int DEFAULT_EDITOR_WORD_POPUP_WIDTH = 240;
+    private static final int DEFAULT_EDITOR_WORD_POPUP_HEIGHT = 120;
+    private static final int DEFAULT_EDITOR_WORD_POPUP_X = 36;
+    private static final int DEFAULT_EDITOR_WORD_POPUP_Y = 36;
+    private static final int DEFAULT_EDITOR_WORD_POPUP_BG_R = 44;
+    private static final int DEFAULT_EDITOR_WORD_POPUP_BG_G = 47;
+    private static final int DEFAULT_EDITOR_WORD_POPUP_BG_B = 52;
+    private static final int DEFAULT_EDITOR_WORD_POPUP_FONT_R = 230;
+    private static final int DEFAULT_EDITOR_WORD_POPUP_FONT_G = 230;
+    private static final int DEFAULT_EDITOR_WORD_POPUP_FONT_B = 230;
     private static final int DEFAULT_WORD_POPUP_WIDTH = 360;
     private static final int DEFAULT_WORD_POPUP_HEIGHT = 220;
     private static final int DEFAULT_WORD_POPUP_X = 36;
@@ -151,6 +161,16 @@ public final class PdfViewerSettings implements PersistentStateComponent<PdfView
         public Integer editorPopupOpacityPercent;
         public Integer editorWordPopupBackgroundOpacityPercent;
         public Integer editorWordPopupTextOpacityPercent;
+        public Integer editorWordPopupWidth;
+        public Integer editorWordPopupHeight;
+        public Integer editorWordPopupX;
+        public Integer editorWordPopupY;
+        public Integer editorWordPopupBgR;
+        public Integer editorWordPopupBgG;
+        public Integer editorWordPopupBgB;
+        public Integer editorWordPopupFontR;
+        public Integer editorWordPopupFontG;
+        public Integer editorWordPopupFontB;
         public Integer wordPopupWidth;
         public Integer wordPopupHeight;
         public Integer wordPopupX;
@@ -181,6 +201,7 @@ public final class PdfViewerSettings implements PersistentStateComponent<PdfView
         public List<BookData> books;
         public Map<String, Integer> bookReadLineById;
         public String currentReadingBookId;
+        public String bookReadingOutputMode;
     }
 
     private StateData state = new StateData();
@@ -665,6 +686,131 @@ public final class PdfViewerSettings implements PersistentStateComponent<PdfView
                 .getMessageBus()
                 .syncPublisher(PdfViewerSettingsListener.TOPIC)
                 .editorWordPopupTextOpacityChanged(normalized);
+    }
+
+    public boolean isEditorWordPopupLocationConfigured() {
+        return state.editorWordPopupX != null && state.editorWordPopupY != null;
+    }
+
+    public int getEditorWordPopupWidth() {
+        Integer value = state.editorWordPopupWidth;
+        if (value == null) {
+            return DEFAULT_EDITOR_WORD_POPUP_WIDTH;
+        }
+        return clampWordPopupSize(value);
+    }
+
+    public int getEditorWordPopupHeight() {
+        Integer value = state.editorWordPopupHeight;
+        if (value == null) {
+            return DEFAULT_EDITOR_WORD_POPUP_HEIGHT;
+        }
+        return clampWordPopupSize(value);
+    }
+
+    public int getEditorWordPopupX() {
+        Integer value = state.editorWordPopupX;
+        if (value == null) {
+            return DEFAULT_EDITOR_WORD_POPUP_X;
+        }
+        return clampWordPopupCoordinate(value);
+    }
+
+    public int getEditorWordPopupY() {
+        Integer value = state.editorWordPopupY;
+        if (value == null) {
+            return DEFAULT_EDITOR_WORD_POPUP_Y;
+        }
+        return clampWordPopupCoordinate(value);
+    }
+
+    public int getEditorWordPopupBackgroundR() {
+        return state.editorWordPopupBgR == null ? DEFAULT_EDITOR_WORD_POPUP_BG_R : clampColorChannel(state.editorWordPopupBgR);
+    }
+
+    public int getEditorWordPopupBackgroundG() {
+        return state.editorWordPopupBgG == null ? DEFAULT_EDITOR_WORD_POPUP_BG_G : clampColorChannel(state.editorWordPopupBgG);
+    }
+
+    public int getEditorWordPopupBackgroundB() {
+        return state.editorWordPopupBgB == null ? DEFAULT_EDITOR_WORD_POPUP_BG_B : clampColorChannel(state.editorWordPopupBgB);
+    }
+
+    public @NotNull Color getEditorWordPopupBackgroundColor() {
+        return new Color(getEditorWordPopupBackgroundR(), getEditorWordPopupBackgroundG(), getEditorWordPopupBackgroundB());
+    }
+
+    public int getEditorWordPopupFontR() {
+        return state.editorWordPopupFontR == null ? DEFAULT_EDITOR_WORD_POPUP_FONT_R : clampColorChannel(state.editorWordPopupFontR);
+    }
+
+    public int getEditorWordPopupFontG() {
+        return state.editorWordPopupFontG == null ? DEFAULT_EDITOR_WORD_POPUP_FONT_G : clampColorChannel(state.editorWordPopupFontG);
+    }
+
+    public int getEditorWordPopupFontB() {
+        return state.editorWordPopupFontB == null ? DEFAULT_EDITOR_WORD_POPUP_FONT_B : clampColorChannel(state.editorWordPopupFontB);
+    }
+
+    public @NotNull Color getEditorWordPopupFontColor() {
+        return new Color(getEditorWordPopupFontR(), getEditorWordPopupFontG(), getEditorWordPopupFontB());
+    }
+
+    public void setEditorWordPopupStyle(
+            int width,
+            int height,
+            int x,
+            int y,
+            int bgR,
+            int bgG,
+            int bgB,
+            int fontR,
+            int fontG,
+            int fontB
+    ) {
+        int normalizedWidth = clampWordPopupSize(width);
+        int normalizedHeight = clampWordPopupSize(height);
+        int normalizedX = clampWordPopupCoordinate(x);
+        int normalizedY = clampWordPopupCoordinate(y);
+        int normalizedBgR = clampColorChannel(bgR);
+        int normalizedBgG = clampColorChannel(bgG);
+        int normalizedBgB = clampColorChannel(bgB);
+        int normalizedFontR = clampColorChannel(fontR);
+        int normalizedFontG = clampColorChannel(fontG);
+        int normalizedFontB = clampColorChannel(fontB);
+        if (getEditorWordPopupWidth() == normalizedWidth
+                && getEditorWordPopupHeight() == normalizedHeight
+                && getEditorWordPopupX() == normalizedX
+                && getEditorWordPopupY() == normalizedY
+                && getEditorWordPopupBackgroundR() == normalizedBgR
+                && getEditorWordPopupBackgroundG() == normalizedBgG
+                && getEditorWordPopupBackgroundB() == normalizedBgB
+                && getEditorWordPopupFontR() == normalizedFontR
+                && getEditorWordPopupFontG() == normalizedFontG
+                && getEditorWordPopupFontB() == normalizedFontB) {
+            return;
+        }
+        state.editorWordPopupWidth = normalizedWidth;
+        state.editorWordPopupHeight = normalizedHeight;
+        state.editorWordPopupX = normalizedX;
+        state.editorWordPopupY = normalizedY;
+        state.editorWordPopupBgR = normalizedBgR;
+        state.editorWordPopupBgG = normalizedBgG;
+        state.editorWordPopupBgB = normalizedBgB;
+        state.editorWordPopupFontR = normalizedFontR;
+        state.editorWordPopupFontG = normalizedFontG;
+        state.editorWordPopupFontB = normalizedFontB;
+        ApplicationManager.getApplication()
+                .getMessageBus()
+                .syncPublisher(PdfViewerSettingsListener.TOPIC)
+                .editorWordPopupStyleChanged(
+                        normalizedWidth,
+                        normalizedHeight,
+                        normalizedX,
+                        normalizedY,
+                        new Color(normalizedBgR, normalizedBgG, normalizedBgB),
+                        new Color(normalizedFontR, normalizedFontG, normalizedFontB)
+                );
     }
 
     public int getWordPopupWidth() {
@@ -1460,6 +1606,27 @@ public final class PdfViewerSettings implements PersistentStateComponent<PdfView
                 .getMessageBus()
                 .syncPublisher(PdfViewerSettingsListener.TOPIC)
                 .bookReadPositionChanged(normalizedBookId, normalizedLine);
+    }
+
+    public @NotNull String getBookReadingOutputMode() {
+        String value = normalizeNullableText(state.bookReadingOutputMode);
+        if (value == null) {
+            return "notification";
+        }
+        return "inline".equalsIgnoreCase(value) ? "inline" : "notification";
+    }
+
+    public void setBookReadingOutputMode(@Nullable String mode) {
+        String normalized = normalizeNullableText(mode);
+        String resolved = "inline".equalsIgnoreCase(normalized) ? "inline" : "notification";
+        if (Objects.equals(getBookReadingOutputMode(), resolved)) {
+            return;
+        }
+        state.bookReadingOutputMode = resolved;
+        ApplicationManager.getApplication()
+                .getMessageBus()
+                .syncPublisher(PdfViewerSettingsListener.TOPIC)
+                .bookReadingOutputModeChanged(resolved);
     }
 
     private static @Nullable String normalizePdfPathKey(@Nullable String pdfPath) {

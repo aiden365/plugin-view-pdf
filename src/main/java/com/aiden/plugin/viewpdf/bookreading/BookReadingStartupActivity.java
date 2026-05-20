@@ -1,5 +1,6 @@
 package com.aiden.plugin.viewpdf.bookreading;
 
+import com.aiden.plugin.viewpdf.settings.PdfViewerSettings;
 import com.aiden.plugin.viewpdf.settings.PdfViewerSettingsListener;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.project.DumbAware;
@@ -96,7 +97,9 @@ public final class BookReadingStartupActivity implements StartupActivity, DumbAw
 
                     @Override
                     public void currentReadingBookChanged(@Nullable String bookId) {
-                        BookReadingNotifier.showFirstLineOnBookSelected(project, bookId);
+                        if ("notification".equals(PdfViewerSettings.getInstance().getBookReadingOutputMode())) {
+                            BookReadingNotifier.showFirstLineOnBookSelected(project, bookId);
+                        }
                     }
 
                     @Override

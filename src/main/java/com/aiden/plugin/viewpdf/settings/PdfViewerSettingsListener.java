@@ -66,6 +66,9 @@ public interface PdfViewerSettingsListener {
     default void editorWordPopupTextOpacityChanged(int percent) {
     }
 
+    default void editorWordPopupStyleChanged(int width, int height, int x, int y, @NotNull Color bgColor, @NotNull Color fontColor) {
+    }
+
     void wordSourceChanged(boolean builtinEnabled, @Nullable String customPath);
 
     void wordCategoryFiltersChanged(@NotNull List<String> difficulties, @NotNull List<String> themes, @NotNull List<String> sources);
@@ -92,5 +95,8 @@ public interface PdfViewerSettingsListener {
     }
 
     default void bookReadPositionChanged(@NotNull String bookId, int lineNumber) {
+    }
+
+    default void bookReadingOutputModeChanged(@NotNull String mode) {
     }
 }

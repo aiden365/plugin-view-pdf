@@ -100,16 +100,18 @@ public final class StockWatcherSettings implements PersistentStateComponent<Stoc
     }
 
     public @NotNull List<String> getVisibleColumns() {
-        List<String> normalized = normalizeVisibleColumns(state.visibleColumns);
-        return normalized.isEmpty() ? StockWatcherColumn.getDefaultVisibleKeys() : normalized;
+        if (state.visibleColumns == null || state.visibleColumns.isEmpty()) {
+            return StockWatcherColumn.getDefaultVisibleKeys();
+        }
+        return normalizeVisibleColumns(state.visibleColumns);
     }
 
     public void setVisibleColumns(@NotNull List<String> columns) {
         List<String> normalized = normalizeVisibleColumns(columns);
-        if (getVisibleColumns().equals(normalized.isEmpty() ? StockWatcherColumn.getDefaultVisibleKeys() : normalized)) {
+        if (getVisibleColumns().equals(normalized)) {
             return;
         }
-        state.visibleColumns = normalized.isEmpty() ? null : normalized;
+        state.visibleColumns = normalized.equals(StockWatcherColumn.getDefaultVisibleKeys()) ? null : normalized;
     }
 
     public int getRefreshIntervalSeconds() {
@@ -224,7 +226,7 @@ public final class StockWatcherSettings implements PersistentStateComponent<Stoc
 
     private void normalizeStateAfterLoad() {
         state.stocks = normalizeNullableText(state.stocks);
-        List<String> columns = normalizeVisibleColumns(state.visibleColumns);
+        List<String> columns = state.visibleColumns == null ? List.of() : normalizeVisibleColumns(state.visibleColumns);
         state.visibleColumns = columns.isEmpty() ? null : columns;
         state.refreshIntervalSeconds = clampRefreshIntervalSeconds(state.refreshIntervalSeconds == null ? DEFAULT_REFRESH_INTERVAL_SECONDS : state.refreshIntervalSeconds);
         state.cooldownMinutes = clampCooldownMinutes(state.cooldownMinutes == null ? DEFAULT_COOLDOWN_MINUTES : state.cooldownMinutes);
@@ -254,8 +256,7 @@ public final class StockWatcherSettings implements PersistentStateComponent<Stoc
             allowed.put(col.getKey(), Boolean.TRUE);
         }
         LinkedHashMap<String, Boolean> unique = new LinkedHashMap<>();
-        List<String> defaults = StockWatcherColumn.getDefaultVisibleKeys();
-        for (String def : defaults) {
+        for (String def : StockWatcherColumn.getMandatoryKeys()) {
             unique.put(def, Boolean.TRUE);
         }
         if (values != null) {

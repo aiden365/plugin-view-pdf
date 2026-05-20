@@ -141,5 +141,14 @@
             <keyboard-shortcut keymap="$default" first-keystroke="ctrl alt DOWN"/>
             <add-to-group group-id="ToolsMenu" anchor="last"/>
         </action>
+
+        <action
+                id="com.aiden.plugin.viewpdf.actions.ShowBookLineInline"
+                class="com.aiden.plugin.viewpdf.actions.ShowBookLineInlineAction"
+                text="显示当前行（内联灰字）"
+                description="以编辑器内联灰字显示当前图书当前行">
+            <keyboard-shortcut keymap="$default" first-keystroke="ctrl alt shift ENTER"/>
+            <add-to-group group-id="ToolsMenu" anchor="last"/>
+        </action>
     </actions>
 </idea-plugin>

@@ -465,7 +465,7 @@ public final class StockWatcherSwatchPanel implements Disposable {
                 return formatDouble(quote.getChange());
             }
             if (StockWatcherColumn.CHANGE_PCT.getKey().equals(key)) {
-                return formatDouble(quote.getChangePct());
+                return formatPercent(quote.getChangePct());
             }
             if (StockWatcherColumn.QUOTE_DATE.getKey().equals(key)) {
                 return nullToEmpty(quote.getQuoteDate());
@@ -498,6 +498,14 @@ public final class StockWatcherSwatchPanel implements Disposable {
                 return "";
             }
             return Long.toString(value);
+        }
+
+        private static @NotNull String formatPercent(@Nullable Double value) {
+            String formatted = formatDouble(value);
+            if (formatted.isEmpty()) {
+                return "";
+            }
+            return formatted + "%";
         }
 
         private int getColumnIndex(@NotNull String key) {

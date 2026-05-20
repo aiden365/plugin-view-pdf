@@ -45,6 +45,7 @@ public final class PdfViewerConfigurable implements Configurable {
     private JPanel panel;
     private TextFieldWithBrowseButton pdfPathField;
     private JComboBox<ReadingBookOption> currentReadingBookComboBox;
+    private JComboBox<BookReadingOutputModeOption> bookReadingOutputModeComboBox;
     private JSpinner bgRSpinner;
     private JSpinner bgGSpinner;
     private JSpinner bgBSpinner;
@@ -86,6 +87,16 @@ public final class PdfViewerConfigurable implements Configurable {
     private JSpinner wordPopupOpacitySpinner;
     private JSpinner editorWordPopupBackgroundOpacitySpinner;
     private JSpinner editorWordPopupTextOpacitySpinner;
+    private JSpinner editorWordPopupWidthSpinner;
+    private JSpinner editorWordPopupHeightSpinner;
+    private JSpinner editorWordPopupXSpinner;
+    private JSpinner editorWordPopupYSpinner;
+    private JSpinner editorWordPopupBgRSpinner;
+    private JSpinner editorWordPopupBgGSpinner;
+    private JSpinner editorWordPopupBgBSpinner;
+    private JSpinner editorWordPopupFontRSpinner;
+    private JSpinner editorWordPopupFontGSpinner;
+    private JSpinner editorWordPopupFontBSpinner;
     private JCheckBox wordPopupShowMeaningCheckBox;
     private JCheckBox wordPopupShowSentenceCheckBox;
     private JCheckBox wordPopupShowSynonymsCheckBox;
@@ -154,6 +165,17 @@ public final class PdfViewerConfigurable implements Configurable {
             currentReadingBookComboBox.setMaximumSize(new Dimension(Integer.MAX_VALUE, currentReadingBookComboBox.getPreferredSize().height));
             currentReadingBookPanel.add(currentReadingBookComboBox);
             panel.add(currentReadingBookPanel);
+            panel.add(Box.createVerticalStrut(4));
+
+            JPanel bookReadingOutputPanel = createRowPanel();
+            bookReadingOutputPanel.add(new JLabel("阅读方式"));
+            bookReadingOutputModeComboBox = new JComboBox<>();
+            bookReadingOutputModeComboBox.setPreferredSize(new Dimension(360, bookReadingOutputModeComboBox.getPreferredSize().height));
+            bookReadingOutputModeComboBox.setMaximumSize(new Dimension(Integer.MAX_VALUE, bookReadingOutputModeComboBox.getPreferredSize().height));
+            bookReadingOutputModeComboBox.addItem(new BookReadingOutputModeOption("notification", "通知栏"));
+            bookReadingOutputModeComboBox.addItem(new BookReadingOutputModeOption("inline", "行内灰字"));
+            bookReadingOutputPanel.add(bookReadingOutputModeComboBox);
+            panel.add(bookReadingOutputPanel);
             panel.add(Box.createVerticalStrut(4));
 
             JPanel bgPanel = createRowPanel();
@@ -373,6 +395,56 @@ public final class PdfViewerConfigurable implements Configurable {
             panel.add(editorWordPopupTextOpacityPanel);
             panel.add(Box.createVerticalStrut(10));
 
+            JPanel editorWordPopupWidthPanel = createRowPanel();
+            editorWordPopupWidthPanel.add(new JLabel("编辑器背单词弹框宽度（px）"));
+            editorWordPopupWidthSpinner = new JSpinner(new SpinnerNumberModel(240, 120, 2000, 10));
+            editorWordPopupWidthPanel.add(editorWordPopupWidthSpinner);
+            panel.add(editorWordPopupWidthPanel);
+            panel.add(Box.createVerticalStrut(4));
+
+            JPanel editorWordPopupHeightPanel = createRowPanel();
+            editorWordPopupHeightPanel.add(new JLabel("编辑器背单词弹框高度（px）"));
+            editorWordPopupHeightSpinner = new JSpinner(new SpinnerNumberModel(120, 80, 2000, 10));
+            editorWordPopupHeightPanel.add(editorWordPopupHeightSpinner);
+            panel.add(editorWordPopupHeightPanel);
+            panel.add(Box.createVerticalStrut(4));
+
+            JPanel editorWordPopupXPanel = createRowPanel();
+            editorWordPopupXPanel.add(new JLabel("编辑器背单词弹框位置 X（px）"));
+            editorWordPopupXSpinner = new JSpinner(new SpinnerNumberModel(36, -5000, 5000, 1));
+            editorWordPopupXPanel.add(editorWordPopupXSpinner);
+            panel.add(editorWordPopupXPanel);
+            panel.add(Box.createVerticalStrut(4));
+
+            JPanel editorWordPopupYPanel = createRowPanel();
+            editorWordPopupYPanel.add(new JLabel("编辑器背单词弹框位置 Y（px）"));
+            editorWordPopupYSpinner = new JSpinner(new SpinnerNumberModel(36, -5000, 5000, 1));
+            editorWordPopupYPanel.add(editorWordPopupYSpinner);
+            panel.add(editorWordPopupYPanel);
+            panel.add(Box.createVerticalStrut(4));
+
+            JPanel editorWordPopupBgPanel = createRowPanel();
+            editorWordPopupBgPanel.add(new JLabel("编辑器背单词弹框背景色 (RGB)"));
+            editorWordPopupBgRSpinner = new JSpinner(new SpinnerNumberModel(44, 0, 255, 1));
+            editorWordPopupBgGSpinner = new JSpinner(new SpinnerNumberModel(47, 0, 255, 1));
+            editorWordPopupBgBSpinner = new JSpinner(new SpinnerNumberModel(52, 0, 255, 1));
+            editorWordPopupBgPanel.add(editorWordPopupBgRSpinner);
+            editorWordPopupBgPanel.add(editorWordPopupBgGSpinner);
+            editorWordPopupBgPanel.add(editorWordPopupBgBSpinner);
+            panel.add(editorWordPopupBgPanel);
+            panel.add(Box.createVerticalStrut(4));
+
+            JPanel editorWordPopupFontPanel = createRowPanel();
+            editorWordPopupFontPanel.add(new JLabel("编辑器背单词弹框字体颜色 (RGB)"));
+            editorWordPopupFontRSpinner = new JSpinner(new SpinnerNumberModel(230, 0, 255, 1));
+            editorWordPopupFontGSpinner = new JSpinner(new SpinnerNumberModel(230, 0, 255, 1));
+            editorWordPopupFontBSpinner = new JSpinner(new SpinnerNumberModel(230, 0, 255, 1));
+            editorWordPopupFontPanel.add(editorWordPopupFontRSpinner);
+            editorWordPopupFontPanel.add(editorWordPopupFontGSpinner);
+            editorWordPopupFontPanel.add(editorWordPopupFontBSpinner);
+            panel.add(editorWordPopupFontPanel);
+            panel.add(Box.createVerticalStrut(10));
+
             JPanel showMeaningPanel = createRowPanel();
             showMeaningPanel.add(new JLabel("显示释义"));
             wordPopupShowMeaningCheckBox = new JCheckBox();
@@ -483,7 +555,7 @@ public final class PdfViewerConfigurable implements Configurable {
             visibleColumnsPanel.add(new JLabel("行情列"));
             visibleColumnsDropdown = new MultiSelectDropdown(
                     StockWatcherColumn.getKeyToLabelMap(),
-                    StockWatcherColumn.getDefaultVisibleKeys()
+                    StockWatcherColumn.getMandatoryKeys()
             );
             visibleColumnsPanel.add(visibleColumnsDropdown);
             panel.add(visibleColumnsPanel);
@@ -522,6 +594,14 @@ public final class PdfViewerConfigurable implements Configurable {
                 : (ReadingBookOption) currentReadingBookComboBox.getSelectedItem();
         String selectedBookId = selectedReadingBook == null ? null : selectedReadingBook.bookId;
         if (!safeText(settings.getCurrentReadingBookId()).equals(safeText(selectedBookId))) {
+            return true;
+        }
+
+        BookReadingOutputModeOption selectedOutputMode = bookReadingOutputModeComboBox == null
+                ? null
+                : (BookReadingOutputModeOption) bookReadingOutputModeComboBox.getSelectedItem();
+        String selectedMode = selectedOutputMode == null ? null : selectedOutputMode.mode;
+        if (!safeText(settings.getBookReadingOutputMode()).equals(safeText(selectedMode))) {
             return true;
         }
 
@@ -640,6 +720,28 @@ public final class PdfViewerConfigurable implements Configurable {
         if (settings.getEditorWordPopupTextOpacityPercent() != editorWordPopupTextOpacity) {
             return true;
         }
+        int editorWordPopupWidth = (int) editorWordPopupWidthSpinner.getValue();
+        int editorWordPopupHeight = (int) editorWordPopupHeightSpinner.getValue();
+        int editorWordPopupX = (int) editorWordPopupXSpinner.getValue();
+        int editorWordPopupY = (int) editorWordPopupYSpinner.getValue();
+        int editorWordPopupBgR = (int) editorWordPopupBgRSpinner.getValue();
+        int editorWordPopupBgG = (int) editorWordPopupBgGSpinner.getValue();
+        int editorWordPopupBgB = (int) editorWordPopupBgBSpinner.getValue();
+        int editorWordPopupFontR = (int) editorWordPopupFontRSpinner.getValue();
+        int editorWordPopupFontG = (int) editorWordPopupFontGSpinner.getValue();
+        int editorWordPopupFontB = (int) editorWordPopupFontBSpinner.getValue();
+        if (settings.getEditorWordPopupWidth() != editorWordPopupWidth
+                || settings.getEditorWordPopupHeight() != editorWordPopupHeight
+                || settings.getEditorWordPopupX() != editorWordPopupX
+                || settings.getEditorWordPopupY() != editorWordPopupY
+                || settings.getEditorWordPopupBackgroundR() != editorWordPopupBgR
+                || settings.getEditorWordPopupBackgroundG() != editorWordPopupBgG
+                || settings.getEditorWordPopupBackgroundB() != editorWordPopupBgB
+                || settings.getEditorWordPopupFontR() != editorWordPopupFontR
+                || settings.getEditorWordPopupFontG() != editorWordPopupFontG
+                || settings.getEditorWordPopupFontB() != editorWordPopupFontB) {
+            return true;
+        }
         if (settings.isWordPopupShowMeaning() != wordPopupShowMeaningCheckBox.isSelected()
                 || settings.isWordPopupShowSentence() != wordPopupShowSentenceCheckBox.isSelected()
                 || settings.isWordPopupShowSynonyms() != wordPopupShowSynonymsCheckBox.isSelected()
@@ -683,6 +785,8 @@ public final class PdfViewerConfigurable implements Configurable {
         settings.setPdfPath(pdfPathField.getText());
         ReadingBookOption selectedReadingBook = (ReadingBookOption) currentReadingBookComboBox.getSelectedItem();
         settings.setCurrentReadingBookId(selectedReadingBook == null ? null : selectedReadingBook.bookId);
+        BookReadingOutputModeOption selectedOutputMode = (BookReadingOutputModeOption) bookReadingOutputModeComboBox.getSelectedItem();
+        settings.setBookReadingOutputMode(selectedOutputMode == null ? null : selectedOutputMode.mode);
         settings.setPdfBackgroundRgb((int) bgRSpinner.getValue(), (int) bgGSpinner.getValue(), (int) bgBSpinner.getValue());
         settings.setPdfTextRgb((int) textRSpinner.getValue(), (int) textGSpinner.getValue(), (int) textBSpinner.getValue());
         settings.setTreeBackgroundRgb((int) treeBgRSpinner.getValue(), (int) treeBgGSpinner.getValue(), (int) treeBgBSpinner.getValue());
@@ -726,6 +830,18 @@ public final class PdfViewerConfigurable implements Configurable {
         settings.setWordPopupOpacityPercent((int) wordPopupOpacitySpinner.getValue());
         settings.setEditorWordPopupBackgroundOpacityPercent((int) editorWordPopupBackgroundOpacitySpinner.getValue());
         settings.setEditorWordPopupTextOpacityPercent((int) editorWordPopupTextOpacitySpinner.getValue());
+        settings.setEditorWordPopupStyle(
+                (int) editorWordPopupWidthSpinner.getValue(),
+                (int) editorWordPopupHeightSpinner.getValue(),
+                (int) editorWordPopupXSpinner.getValue(),
+                (int) editorWordPopupYSpinner.getValue(),
+                (int) editorWordPopupBgRSpinner.getValue(),
+                (int) editorWordPopupBgGSpinner.getValue(),
+                (int) editorWordPopupBgBSpinner.getValue(),
+                (int) editorWordPopupFontRSpinner.getValue(),
+                (int) editorWordPopupFontGSpinner.getValue(),
+                (int) editorWordPopupFontBSpinner.getValue()
+        );
         settings.setWordPopupContentDisplay(
                 wordPopupShowMeaningCheckBox.isSelected(),
                 wordPopupShowSentenceCheckBox.isSelected(),
@@ -761,6 +877,7 @@ public final class PdfViewerConfigurable implements Configurable {
         String value = settings.getPdfPath();
         pdfPathField.setText(value == null ? "" : value);
         refreshReadingBookOptions(settings.getCurrentReadingBookId());
+        refreshBookReadingOutputMode(settings.getBookReadingOutputMode());
 
         bgRSpinner.setValue(settings.getPdfBackgroundR());
         bgGSpinner.setValue(settings.getPdfBackgroundG());
@@ -803,6 +920,16 @@ public final class PdfViewerConfigurable implements Configurable {
         wordPopupOpacitySpinner.setValue(settings.getWordPopupOpacityPercent());
         editorWordPopupBackgroundOpacitySpinner.setValue(settings.getEditorWordPopupBackgroundOpacityPercent());
         editorWordPopupTextOpacitySpinner.setValue(settings.getEditorWordPopupTextOpacityPercent());
+        editorWordPopupWidthSpinner.setValue(settings.getEditorWordPopupWidth());
+        editorWordPopupHeightSpinner.setValue(settings.getEditorWordPopupHeight());
+        editorWordPopupXSpinner.setValue(settings.getEditorWordPopupX());
+        editorWordPopupYSpinner.setValue(settings.getEditorWordPopupY());
+        editorWordPopupBgRSpinner.setValue(settings.getEditorWordPopupBackgroundR());
+        editorWordPopupBgGSpinner.setValue(settings.getEditorWordPopupBackgroundG());
+        editorWordPopupBgBSpinner.setValue(settings.getEditorWordPopupBackgroundB());
+        editorWordPopupFontRSpinner.setValue(settings.getEditorWordPopupFontR());
+        editorWordPopupFontGSpinner.setValue(settings.getEditorWordPopupFontG());
+        editorWordPopupFontBSpinner.setValue(settings.getEditorWordPopupFontB());
         wordPopupShowMeaningCheckBox.setSelected(settings.isWordPopupShowMeaning());
         wordPopupShowSentenceCheckBox.setSelected(settings.isWordPopupShowSentence());
         wordPopupShowSynonymsCheckBox.setSelected(settings.isWordPopupShowSynonyms());
@@ -833,6 +960,7 @@ public final class PdfViewerConfigurable implements Configurable {
         panel = null;
         pdfPathField = null;
         currentReadingBookComboBox = null;
+        bookReadingOutputModeComboBox = null;
         bgRSpinner = null;
         bgGSpinner = null;
         bgBSpinner = null;
@@ -874,6 +1002,16 @@ public final class PdfViewerConfigurable implements Configurable {
         wordPopupOpacitySpinner = null;
         editorWordPopupBackgroundOpacitySpinner = null;
         editorWordPopupTextOpacitySpinner = null;
+        editorWordPopupWidthSpinner = null;
+        editorWordPopupHeightSpinner = null;
+        editorWordPopupXSpinner = null;
+        editorWordPopupYSpinner = null;
+        editorWordPopupBgRSpinner = null;
+        editorWordPopupBgGSpinner = null;
+        editorWordPopupBgBSpinner = null;
+        editorWordPopupFontRSpinner = null;
+        editorWordPopupFontGSpinner = null;
+        editorWordPopupFontBSpinner = null;
         wordPopupShowMeaningCheckBox = null;
         wordPopupShowSentenceCheckBox = null;
         wordPopupShowSynonymsCheckBox = null;
@@ -1070,6 +1208,40 @@ public final class PdfViewerConfigurable implements Configurable {
         public String toString() {
             return label;
         }
+    }
+
+    private static final class BookReadingOutputModeOption {
+        private final String mode;
+        private final String label;
+
+        private BookReadingOutputModeOption(String mode, String label) {
+            this.mode = mode;
+            this.label = label;
+        }
+
+        @Override
+        public String toString() {
+            return label;
+        }
+    }
+
+    private void refreshBookReadingOutputMode(@NotNull String mode) {
+        if (bookReadingOutputModeComboBox == null) {
+            return;
+        }
+        String normalized = mode == null ? "notification" : mode.trim().toLowerCase(Locale.ROOT);
+        BookReadingOutputModeOption selected = null;
+        for (int i = 0; i < bookReadingOutputModeComboBox.getItemCount(); i++) {
+            BookReadingOutputModeOption item = bookReadingOutputModeComboBox.getItemAt(i);
+            if (item != null && normalized.equals(item.mode)) {
+                selected = item;
+                break;
+            }
+        }
+        if (selected == null && bookReadingOutputModeComboBox.getItemCount() > 0) {
+            selected = bookReadingOutputModeComboBox.getItemAt(0);
+        }
+        bookReadingOutputModeComboBox.setSelectedItem(selected);
     }
 
     private void updatePdfPathFieldWidth() {

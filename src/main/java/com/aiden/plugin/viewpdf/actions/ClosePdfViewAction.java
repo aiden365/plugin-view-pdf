@@ -20,12 +20,8 @@ public final class ClosePdfViewAction extends AnAction implements DumbAware {
             return;
         }
 
-
-
-
-
-
         PdfViewerToolWindowController controller = project.getUserData(PdfViewerKeys.CONTROLLER_KEY);
+
         if (controller == null) {
             return;
         }
@@ -39,6 +35,7 @@ public final class ClosePdfViewAction extends AnAction implements DumbAware {
     @Override
     public void update(@NotNull AnActionEvent e) {
         Project project = e.getProject();
+
         PdfViewerToolWindowController controller = project == null ? null : project.getUserData(PdfViewerKeys.CONTROLLER_KEY);
         e.getPresentation().setEnabled(controller != null);
         e.getPresentation().setText(controller != null && controller.isPdfToggleEnabled() ? "切换为代码伪装" : "切换为PDF查看");

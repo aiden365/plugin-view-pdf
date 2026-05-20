@@ -22,7 +22,7 @@ public enum StockWatcherColumn {
     VOLUME("volume", "成交量"),
     AMOUNT("amount", "成交额"),
     CHANGE("change", "涨跌额"),
-    CHANGE_PCT("changePct", "涨跌幅%"),
+    CHANGE_PCT("changePct", "涨跌幅"),
     QUOTE_DATE("quoteDate", "行情日期"),
     QUOTE_TIME("quoteTime", "行情时间"),
     QUOTE_DATE_TIME("quoteDateTime", "行情时间戳"),
@@ -45,6 +45,10 @@ public enum StockWatcherColumn {
     }
 
     public static @NotNull List<String> getDefaultVisibleKeys() {
+        return List.of(CODE.key, NAME.key, CHANGE_PCT.key, ACTIONS.key);
+    }
+
+    public static @NotNull List<String> getMandatoryKeys() {
         return List.of(CODE.key, NAME.key, ACTIONS.key);
     }
 
