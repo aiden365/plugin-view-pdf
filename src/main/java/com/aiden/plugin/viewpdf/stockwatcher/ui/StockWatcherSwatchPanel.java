@@ -20,6 +20,8 @@ import javax.swing.JComponent;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JTable;
+import javax.swing.JTextField;
+import javax.swing.JOptionPane;
 import javax.swing.SwingConstants;
 import javax.swing.SwingUtilities;
 import javax.swing.table.AbstractTableModel;
@@ -29,6 +31,7 @@ import java.awt.BorderLayout;
 import java.awt.Component;
 import java.awt.FlowLayout;
 import java.awt.CardLayout;
+import java.awt.GridLayout;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -279,12 +282,13 @@ public final class StockWatcherSwatchPanel implements Disposable {
     }
 
     private void checkThresholdAndNotify(@NotNull Map<String, Quote> quotes) {
-        Map<String, Double> thresholds = settings.getPerStockThresholdPct();
-        if (thresholds.isEmpty()) {
+        Map<String, Double> upThresholds = settings.getPerStockUpThresholdPct();
+        Map<String, Double> downThresholds = settings.getPerStockDownThresholdPct();
+        if (upThresholds.isEmpty() && downThresholds.isEmpty()) {
             return;
         }
         for (String code : new ArrayList<>(lastNotifyMillisByCode.keySet())) {
-            if (!thresholds.containsKey(code)) {
+            if (!upThresholds.containsKey(code) && !downThresholds.containsKey(code)) {
                 lastNotifyMillisByCode.remove(code);
             }
         }
@@ -293,12 +297,19 @@ public final class StockWatcherSwatchPanel implements Disposable {
         int cooldownMinutes = settings.getCooldownMinutes();
         long cooldownMillis = Math.max(0, cooldownMinutes) * 60_000L;
 
-        for (Map.Entry<String, Double> entry : thresholds.entrySet()) {
-            String code = entry.getKey();
-            Double threshold = entry.getValue();
-            if (code == null || code.isBlank() || threshold == null || !Double.isFinite(threshold) || threshold <= 0) {
-                continue;
+        LinkedHashMap<String, Boolean> codes = new LinkedHashMap<>();
+        for (String code : upThresholds.keySet()) {
+            if (code != null && !code.isBlank()) {
+                codes.put(code, Boolean.TRUE);
             }
+        }
+        for (String code : downThresholds.keySet()) {
+            if (code != null && !code.isBlank()) {
+                codes.put(code, Boolean.TRUE);
+            }
+        }
+
+        for (String code : codes.keySet()) {
             Quote quote = quotes.get(code);
             if (quote == null) {
                 continue;
@@ -307,7 +318,12 @@ public final class StockWatcherSwatchPanel implements Disposable {
             if (changePct == null || !Double.isFinite(changePct)) {
                 continue;
             }
-            if (Math.abs(changePct) < threshold) {
+
+            Double up = upThresholds.get(code);
+            Double down = downThresholds.get(code);
+            boolean triggerUp = up != null && Double.isFinite(up) && up > 0 && changePct >= up;
+            boolean triggerDown = down != null && Double.isFinite(down) && down > 0 && changePct <= -down;
+            if (!triggerUp && !triggerDown) {
                 continue;
             }
             if (cooldownMillis > 0) {
@@ -317,46 +333,23 @@ public final class StockWatcherSwatchPanel implements Disposable {
                 }
             }
             lastNotifyMillisByCode.put(code, now);
-            notifyThresholdTriggered(quote, threshold);
+            notifyThresholdTriggered();
         }
     }
 
-    private void notifyThresholdTriggered(@NotNull Quote quote, double threshold) {
+    private void notifyThresholdTriggered() {
         if (project.isDisposed()) {
             return;
         }
-        StringBuilder sb = new StringBuilder();
-        sb.append("代码: ").append(escape(quote.getCode()));
-        String name = quote.getName();
-        if (name != null && !name.isBlank()) {
-            sb.append("<br>名称: ").append(escape(name.trim()));
-        } else {
-            sb.append("<br>名称: ");
-        }
-        sb.append("<br>现价: ").append(formatDouble(quote.getPrice()));
-        sb.append("<br>涨跌幅: ").append(formatDouble(quote.getChangePct())).append("%");
-        sb.append("<br>阈值: ").append(String.format(Locale.ROOT, "%.2f", threshold)).append("%");
-        String quoteDateTime = quote.getQuoteDateTime();
-        sb.append("<br>行情时间: ").append(escape(quoteDateTime == null ? "" : quoteDateTime));
-        String lastRefreshTime = quote.getLastRefreshTime();
-        sb.append("<br>刷新时间: ").append(escape(lastRefreshTime == null ? "" : lastRefreshTime));
-        String content = sb.toString();
-
         ApplicationManager.getApplication().invokeLater(() -> {
             if (project.isDisposed()) {
                 return;
             }
             NotificationGroupManager.getInstance()
                     .getNotificationGroup(NOTIFICATION_GROUP_ID)
-                    .createNotification(content, NotificationType.INFORMATION)
+                    .createNotification("XTools Swatch  Notifications", NotificationType.INFORMATION)
                     .notify(project);
         });
-    }
-
-    private static @NotNull String escape(@NotNull String text) {
-        return text.replace("&", "&amp;")
-                .replace("<", "&lt;")
-                .replace(">", "&gt;");
     }
 
     private static @NotNull String formatDouble(@Nullable Double value) {
@@ -572,37 +565,48 @@ public final class StockWatcherSwatchPanel implements Disposable {
 
     private void showThresholdDialog(@NotNull String code) {
         String normalizedCode = code.trim().toLowerCase(Locale.ROOT);
-        Double current = settings.getPerStockThresholdPct().get(normalizedCode);
-        String initial = current == null ? "" : String.format(Locale.ROOT, "%.2f", current);
-        String input = Messages.showInputDialog(
-                project,
-                "设置单股涨跌幅阈值（%）。留空或输入 <= 0 将关闭该股票的通知。",
-                "通知阈值 - " + normalizedCode,
+        Double currentUp = settings.getPerStockUpThresholdPct().get(normalizedCode);
+        Double currentDown = settings.getPerStockDownThresholdPct().get(normalizedCode);
+
+        JTextField upField = new JTextField(currentUp == null ? "" : String.format(Locale.ROOT, "%.2f", currentUp));
+        JTextField downField = new JTextField(currentDown == null ? "" : String.format(Locale.ROOT, "%.2f", currentDown));
+        JPanel panel = new JPanel(new GridLayout(2, 2, 8, 4));
+        panel.add(new JLabel("上涨阈值（%）"));
+        panel.add(upField);
+        panel.add(new JLabel("下跌阈值（%）"));
+        panel.add(downField);
+
+        int result = JOptionPane.showConfirmDialog(
                 null,
-                initial,
-                null
+                panel,
+                "通知阈值 - " + normalizedCode,
+                JOptionPane.OK_CANCEL_OPTION,
+                JOptionPane.PLAIN_MESSAGE
         );
-        if (input == null) {
+        if (result != JOptionPane.OK_OPTION) {
             return;
         }
-        ThresholdParseResult parsed = parseThresholdInput(input);
-        if (!parsed.valid) {
-            Messages.showErrorDialog(project, "阈值格式不正确，请输入数字（例如 3 或 3.5）。", "通知阈值");
+
+        ParsedThreshold upParsed = parseThresholdValue(upField.getText());
+        if (!upParsed.valid) {
+            Messages.showErrorDialog(project, "上涨阈值格式不正确，请输入数字（例如 3 或 3.5）。", "通知阈值");
             return;
         }
-        if (parsed.value == null) {
-            settings.setPerStockThresholdPct(normalizedCode, null);
-            lastNotifyMillisByCode.remove(normalizedCode);
+        ParsedThreshold downParsed = parseThresholdValue(downField.getText());
+        if (!downParsed.valid) {
+            Messages.showErrorDialog(project, "下跌阈值格式不正确，请输入数字（例如 3 或 3.5）。", "通知阈值");
             return;
         }
-        settings.setPerStockThresholdPct(normalizedCode, parsed.value);
+
+        settings.setPerStockUpThresholdPct(normalizedCode, upParsed.value);
+        settings.setPerStockDownThresholdPct(normalizedCode, downParsed.value);
         lastNotifyMillisByCode.remove(normalizedCode);
     }
 
-    private static @NotNull ThresholdParseResult parseThresholdInput(@NotNull String input) {
-        String trimmed = input.trim();
+    private static @NotNull ParsedThreshold parseThresholdValue(@Nullable String input) {
+        String trimmed = input == null ? "" : input.trim();
         if (trimmed.isEmpty()) {
-            return ThresholdParseResult.remove();
+            return ParsedThreshold.remove();
         }
         if (trimmed.endsWith("%")) {
             trimmed = trimmed.substring(0, trimmed.length() - 1).trim();
@@ -610,33 +614,33 @@ public final class StockWatcherSwatchPanel implements Disposable {
         try {
             double parsed = Double.parseDouble(trimmed);
             if (!Double.isFinite(parsed) || parsed <= 0) {
-                return ThresholdParseResult.remove();
+                return ParsedThreshold.remove();
             }
-            return ThresholdParseResult.of(parsed);
+            return ParsedThreshold.of(parsed);
         } catch (NumberFormatException ignored) {
-            return ThresholdParseResult.invalid();
+            return ParsedThreshold.invalid();
         }
     }
 
-    private static final class ThresholdParseResult {
+    private static final class ParsedThreshold {
         private final boolean valid;
         private final @Nullable Double value;
 
-        private ThresholdParseResult(boolean valid, @Nullable Double value) {
+        private ParsedThreshold(boolean valid, @Nullable Double value) {
             this.valid = valid;
             this.value = value;
         }
 
-        private static @NotNull ThresholdParseResult of(double value) {
-            return new ThresholdParseResult(true, value);
+        private static @NotNull ParsedThreshold of(double value) {
+            return new ParsedThreshold(true, value);
         }
 
-        private static @NotNull ThresholdParseResult remove() {
-            return new ThresholdParseResult(true, null);
+        private static @NotNull ParsedThreshold remove() {
+            return new ParsedThreshold(true, null);
         }
 
-        private static @NotNull ThresholdParseResult invalid() {
-            return new ThresholdParseResult(false, null);
+        private static @NotNull ParsedThreshold invalid() {
+            return new ParsedThreshold(false, null);
         }
     }
 }

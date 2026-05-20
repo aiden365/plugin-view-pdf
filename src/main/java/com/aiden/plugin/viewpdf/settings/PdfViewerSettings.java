@@ -4,10 +4,14 @@ import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.components.PersistentStateComponent;
 import com.intellij.openapi.components.State;
 import com.intellij.openapi.components.Storage;
+import com.intellij.openapi.vfs.LocalFileSystem;
+import com.intellij.openapi.vfs.VirtualFile;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.awt.Color;
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -18,6 +22,7 @@ import java.util.Objects;
 import java.util.UUID;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 
 @State(
@@ -56,12 +61,12 @@ public final class PdfViewerSettings implements PersistentStateComponent<PdfView
     private static final int DEFAULT_EDITOR_WORD_POPUP_HEIGHT = 120;
     private static final int DEFAULT_EDITOR_WORD_POPUP_X = 36;
     private static final int DEFAULT_EDITOR_WORD_POPUP_Y = 36;
-    private static final int DEFAULT_EDITOR_WORD_POPUP_BG_R = 44;
-    private static final int DEFAULT_EDITOR_WORD_POPUP_BG_G = 47;
-    private static final int DEFAULT_EDITOR_WORD_POPUP_BG_B = 52;
-    private static final int DEFAULT_EDITOR_WORD_POPUP_FONT_R = 230;
-    private static final int DEFAULT_EDITOR_WORD_POPUP_FONT_G = 230;
-    private static final int DEFAULT_EDITOR_WORD_POPUP_FONT_B = 230;
+    private static final int DEFAULT_EDITOR_WORD_POPUP_BG_R = 38;
+    private static final int DEFAULT_EDITOR_WORD_POPUP_BG_G = 40;
+    private static final int DEFAULT_EDITOR_WORD_POPUP_BG_B = 46;
+    private static final int DEFAULT_EDITOR_WORD_POPUP_FONT_R = 255;
+    private static final int DEFAULT_EDITOR_WORD_POPUP_FONT_G = 255;
+    private static final int DEFAULT_EDITOR_WORD_POPUP_FONT_B = 255;
     private static final int DEFAULT_WORD_POPUP_WIDTH = 360;
     private static final int DEFAULT_WORD_POPUP_HEIGHT = 220;
     private static final int DEFAULT_WORD_POPUP_X = 36;
@@ -1547,6 +1552,75 @@ public final class PdfViewerSettings implements PersistentStateComponent<PdfView
         return true;
     }
 
+    public boolean updateBook(@NotNull String bookId, @NotNull String name, @Nullable String inlineContent, @Nullable String filePath) {
+        String normalizedId = normalizeNullableText(bookId);
+        String normalizedName = normalizeNullableText(name);
+        String normalizedPath = normalizeNullableText(filePath);
+        if (normalizedId == null || normalizedName == null) {
+            return false;
+        }
+        List<BookData> current = new ArrayList<>(getBooks());
+        BookData target = null;
+        for (BookData book : current) {
+            if (book == null || book.id == null) {
+                continue;
+            }
+            if (normalizedId.equals(book.id)) {
+                target = book;
+                break;
+            }
+        }
+        if (target == null) {
+            return false;
+        }
+        List<BookData> others = new ArrayList<>();
+        for (BookData book : current) {
+            if (book == null || book.id == null) {
+                continue;
+            }
+            if (normalizedId.equals(book.id)) {
+                continue;
+            }
+            others.add(book);
+        }
+        String uniqueName = Objects.equals(normalizeNullableText(target.name), normalizedName)
+                ? normalizedName
+                : resolveUniqueBookName(others, normalizedName);
+        String sourceType = normalizeBookSourceType(target.sourceType);
+        boolean changed = false;
+        if (!Objects.equals(target.name, uniqueName)) {
+            target.name = uniqueName;
+            changed = true;
+        }
+        if (!Objects.equals(target.inlineContent, inlineContent)) {
+            target.inlineContent = inlineContent;
+            changed = true;
+        }
+        if (BOOK_SOURCE_IMPORT.equals(sourceType) && normalizedPath != null && !Objects.equals(normalizeNullableText(target.filePath), normalizedPath)) {
+            target.filePath = normalizedPath;
+            changed = true;
+        }
+        if (!changed) {
+            return false;
+        }
+        setBooks(current);
+        return true;
+    }
+
+    public boolean deleteBook(@NotNull String bookId) {
+        String normalizedId = normalizeNullableText(bookId);
+        if (normalizedId == null) {
+            return false;
+        }
+        List<BookData> current = new ArrayList<>(getBooks());
+        boolean removed = current.removeIf(book -> book != null && normalizedId.equals(book.id));
+        if (!removed) {
+            return false;
+        }
+        setBooks(current);
+        return true;
+    }
+
     public @Nullable String getCurrentReadingBookId() {
         String value = normalizeNullableText(state.currentReadingBookId);
         if (value == null) {
@@ -1949,7 +2023,24 @@ public final class PdfViewerSettings implements PersistentStateComponent<PdfView
 
     private static @Nullable String safeReadTextFile(@NotNull String filePath) {
         try {
-            byte[] bytes = Files.readAllBytes(Paths.get(filePath));
+            VirtualFile file = LocalFileSystem.getInstance().findFileByPath(filePath);
+            if (file != null && file.isValid()) {
+                StringBuilder sb = new StringBuilder();
+                try (BufferedReader reader = new BufferedReader(new InputStreamReader(file.getInputStream(), file.getCharset()))) {
+                    String line;
+                    boolean first = true;
+                    while ((line = reader.readLine()) != null) {
+                        if (!first) {
+                            sb.append('\n');
+                        }
+                        sb.append(line);
+                        first = false;
+                    }
+                }
+                return sb.toString();
+            }
+            Path path = Paths.get(filePath);
+            byte[] bytes = Files.readAllBytes(path);
             return new String(bytes, StandardCharsets.UTF_8);
         } catch (Exception ignored) {
             return null;

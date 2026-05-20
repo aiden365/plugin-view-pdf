@@ -8,6 +8,7 @@ import com.intellij.openapi.fileChooser.FileChooser;
 import com.intellij.openapi.fileChooser.FileChooserDescriptor;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.vfs.VirtualFile;
+import com.intellij.openapi.vfs.VfsUtilCore;
 import com.intellij.ui.components.JBScrollPane;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -34,6 +35,8 @@ import java.awt.FlowLayout;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.awt.Insets;
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -86,7 +89,7 @@ public final class BookManagerPanel implements Disposable {
 
         tableModel = new BookTableModel(settings);
         table = new JTable(tableModel);
-        table.setRowHeight(26);
+        table.setRowHeight(36);
         table.getColumnModel().getColumn(1).setCellRenderer(new ActionCellRenderer());
         table.getColumnModel().getColumn(1).setCellEditor(new ActionCellEditor());
         JScrollPane scrollPane = new JBScrollPane(table);
@@ -266,31 +269,36 @@ public final class BookManagerPanel implements Disposable {
 
     private void editBook(@NotNull PdfViewerSettings.BookData book) {
         String sourceType = book.sourceType == null ? "" : book.sourceType.trim().toLowerCase(Locale.ROOT);
-        if ("import".equals(sourceType)) {
-            VirtualFile file = chooseTxtFile(book.filePath);
-            if (file == null) {
-                return;
-            }
-            boolean changed = settings.reimportBook(book.id, file.getPath());
-            if (changed) {
-                maybeSelectCurrentBook(book.id, false);
-            }
-            return;
-        }
-        ManualBookFormResult result = showManualBookDialog(
+        boolean allowReimport = "import".equals(sourceType);
+        BookEditResult result = showBookEditDialog(
                 "编辑图书",
                 book.name == null ? "" : book.name,
                 book.inlineContent == null ? "" : book.inlineContent,
-                false,
-                true
+                allowReimport,
+                book.filePath
         );
         if (result == null) {
             return;
         }
-        boolean changed = settings.updateManualBookContent(book.id, result.content);
+        boolean changed = settings.updateBook(book.id, result.name, result.content, result.filePath);
         if (changed) {
             maybeSelectCurrentBook(book.id, false);
         }
+    }
+
+    private void deleteBook(@NotNull PdfViewerSettings.BookData book) {
+        String name = book.name == null ? "" : book.name;
+        int choice = JOptionPane.showConfirmDialog(
+                rootPanel,
+                "确认删除图书：" + name + "？",
+                "删除图书",
+                JOptionPane.OK_CANCEL_OPTION,
+                JOptionPane.WARNING_MESSAGE
+        );
+        if (choice != JOptionPane.OK_OPTION) {
+            return;
+        }
+        settings.deleteBook(book.id);
     }
 
     private @Nullable VirtualFile chooseTxtFile(@Nullable String initialPath) {
@@ -387,6 +395,102 @@ public final class BookManagerPanel implements Disposable {
         }
     }
 
+    private static final class BookEditResult {
+        private final String name;
+        private final String content;
+        private final String filePath;
+
+        private BookEditResult(@NotNull String name, @NotNull String content, @Nullable String filePath) {
+            this.name = name;
+            this.content = content;
+            this.filePath = filePath;
+        }
+    }
+
+    private @Nullable BookEditResult showBookEditDialog(
+            @NotNull String title,
+            @NotNull String initialName,
+            @NotNull String initialContent,
+            boolean allowReimport,
+            @Nullable String initialFilePath
+    ) {
+        JPanel panel = new JPanel(new BorderLayout());
+
+        JPanel top = new JPanel(new GridBagLayout());
+        GridBagConstraints gbc = new GridBagConstraints();
+        gbc.gridy = 0;
+        gbc.insets = new Insets(0, 0, 0, 6);
+        gbc.fill = GridBagConstraints.HORIZONTAL;
+
+        top.add(new JLabel("书名"), gbc);
+        JTextField nameField = new JTextField(initialName, 24);
+        gbc.gridx = 1;
+        gbc.weightx = 1;
+        top.add(nameField, gbc);
+
+        final String[] selectedPath = {initialFilePath};
+        JButton reimportButton = null;
+        if (allowReimport) {
+            reimportButton = new JButton("重新导入");
+            gbc.gridx = 2;
+            gbc.weightx = 0;
+            gbc.insets = new Insets(0, 0, 0, 0);
+            top.add(reimportButton, gbc);
+        }
+
+        panel.add(top, BorderLayout.NORTH);
+
+        JTextArea contentArea = new JTextArea(initialContent, 14, 48);
+        JScrollPane scrollPane = new JBScrollPane(contentArea);
+        panel.add(scrollPane, BorderLayout.CENTER);
+
+        if (reimportButton != null) {
+            reimportButton.addActionListener(e -> {
+                VirtualFile file = chooseTxtFile(selectedPath[0]);
+                if (file == null) {
+                    return;
+                }
+                selectedPath[0] = file.getPath();
+                try {
+                    String text = readFileLineByLine(file);
+                    contentArea.setText(text);
+                } catch (Exception ex) {
+                    JOptionPane.showMessageDialog(rootPanel, "导入失败", title, JOptionPane.WARNING_MESSAGE);
+                }
+            });
+        }
+
+        while (true) {
+            int choice = JOptionPane.showConfirmDialog(rootPanel, panel, title, JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
+            if (choice != JOptionPane.OK_OPTION) {
+                return null;
+            }
+            String name = nameField.getText() == null ? "" : nameField.getText().trim();
+            if (name.isEmpty()) {
+                JOptionPane.showMessageDialog(rootPanel, "请输入书名", title, JOptionPane.WARNING_MESSAGE);
+                continue;
+            }
+            String content = contentArea.getText() == null ? "" : contentArea.getText();
+            return new BookEditResult(name, content, selectedPath[0]);
+        }
+    }
+
+    private static @NotNull String readFileLineByLine(@NotNull VirtualFile file) throws Exception {
+        StringBuilder sb = new StringBuilder();
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(file.getInputStream(), file.getCharset()))) {
+            String line;
+            boolean first = true;
+            while ((line = reader.readLine()) != null) {
+                if (!first) {
+                    sb.append('\n');
+                }
+                sb.append(line);
+                first = false;
+            }
+        }
+        return sb.toString();
+    }
+
     private static final class BookTableModel extends AbstractTableModel {
         private static final String[] COLUMNS = {"书名", "操作"};
 
@@ -443,10 +547,12 @@ public final class BookManagerPanel implements Disposable {
         private final JPanel panel = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 0));
         private final JButton selectButton = new JButton();
         private final JButton editButton = new JButton("编辑");
+        private final JButton deleteButton = new JButton("删除");
 
         private ActionCellRenderer() {
             panel.add(selectButton);
             panel.add(editButton);
+            panel.add(deleteButton);
         }
 
         @Override
@@ -457,6 +563,7 @@ public final class BookManagerPanel implements Disposable {
             selectButton.setText(current ? "阅读中" : "选择/阅读");
             selectButton.setEnabled(!current);
             editButton.setEnabled(book != null);
+            deleteButton.setEnabled(book != null);
             return panel;
         }
     }
@@ -465,11 +572,13 @@ public final class BookManagerPanel implements Disposable {
         private final JPanel panel = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 0));
         private final JButton selectButton = new JButton();
         private final JButton editButton = new JButton("编辑");
+        private final JButton deleteButton = new JButton("删除");
         private int editingRow = -1;
 
         private ActionCellEditor() {
             panel.add(selectButton);
             panel.add(editButton);
+            panel.add(deleteButton);
 
             selectButton.addActionListener(e -> {
                 int row = editingRow;
@@ -488,6 +597,17 @@ public final class BookManagerPanel implements Disposable {
                     PdfViewerSettings.BookData book = tableModel.getRow(row);
                     if (book != null) {
                         editBook(book);
+                    }
+                });
+                stopCellEditing();
+            });
+
+            deleteButton.addActionListener(e -> {
+                int row = editingRow;
+                SwingUtilities.invokeLater(() -> {
+                    PdfViewerSettings.BookData book = tableModel.getRow(row);
+                    if (book != null) {
+                        deleteBook(book);
                     }
                 });
                 stopCellEditing();

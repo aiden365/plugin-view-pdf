@@ -30,6 +30,8 @@ public final class StockWatcherSettings implements PersistentStateComponent<Stoc
         public List<String> visibleColumns;
         public Integer refreshIntervalSeconds;
         public Integer cooldownMinutes;
+        public Map<String, Double> perStockUpThresholdPct;
+        public Map<String, Double> perStockDownThresholdPct;
         public Map<String, Double> perStockThresholdPct;
     }
 
@@ -146,42 +148,39 @@ public final class StockWatcherSettings implements PersistentStateComponent<Stoc
         state.cooldownMinutes = normalized;
     }
 
-    public @NotNull Map<String, Double> getPerStockThresholdPct() {
-        Map<String, Double> map = state.perStockThresholdPct;
+    public @NotNull Map<String, Double> getPerStockUpThresholdPct() {
+        Map<String, Double> map = state.perStockUpThresholdPct;
         if (map == null || map.isEmpty()) {
             return Map.of();
         }
-        LinkedHashMap<String, Double> normalized = new LinkedHashMap<>();
-        for (Map.Entry<String, Double> entry : map.entrySet()) {
-            String code = normalizeNullableText(entry.getKey());
-            if (code == null) {
-                continue;
-            }
-            code = code.toLowerCase(Locale.ROOT);
-            Double value = entry.getValue();
-            if (value == null || !Double.isFinite(value) || value <= 0) {
-                continue;
-            }
-            normalized.put(code, value);
-        }
+        Map<String, Double> normalized = normalizeThresholdMap(map);
         return normalized.isEmpty() ? Map.of() : normalized;
     }
 
-    public void setPerStockThresholdPct(@NotNull Map<String, Double> thresholds) {
-        Map<String, Double> normalized = normalizeThresholdMap(thresholds);
-        if (getPerStockThresholdPct().equals(normalized)) {
-            return;
+    public @NotNull Map<String, Double> getPerStockDownThresholdPct() {
+        Map<String, Double> map = state.perStockDownThresholdPct;
+        if (map == null || map.isEmpty()) {
+            return Map.of();
         }
-        state.perStockThresholdPct = normalized.isEmpty() ? null : normalized;
+        Map<String, Double> normalized = normalizeThresholdMap(map);
+        return normalized.isEmpty() ? Map.of() : normalized;
     }
 
-    public void setPerStockThresholdPct(@Nullable String code, @Nullable Double thresholdPct) {
+    public void setPerStockUpThresholdPct(@Nullable String code, @Nullable Double thresholdPct) {
+        setPerStockThresholdInternal(code, thresholdPct, true);
+    }
+
+    public void setPerStockDownThresholdPct(@Nullable String code, @Nullable Double thresholdPct) {
+        setPerStockThresholdInternal(code, thresholdPct, false);
+    }
+
+    private void setPerStockThresholdInternal(@Nullable String code, @Nullable Double thresholdPct, boolean isUp) {
         String key = normalizeNullableText(code);
         if (key == null) {
             return;
         }
         key = key.toLowerCase(Locale.ROOT);
-        Map<String, Double> current = new LinkedHashMap<>(getPerStockThresholdPct());
+        Map<String, Double> current = new LinkedHashMap<>(isUp ? getPerStockUpThresholdPct() : getPerStockDownThresholdPct());
         if (thresholdPct == null || !Double.isFinite(thresholdPct) || thresholdPct <= 0) {
             if (current.remove(key) == null) {
                 return;
@@ -192,7 +191,11 @@ public final class StockWatcherSettings implements PersistentStateComponent<Stoc
                 return;
             }
         }
-        state.perStockThresholdPct = current.isEmpty() ? null : current;
+        if (isUp) {
+            state.perStockUpThresholdPct = current.isEmpty() ? null : current;
+        } else {
+            state.perStockDownThresholdPct = current.isEmpty() ? null : current;
+        }
     }
 
     public static @NotNull NormalizedStocks normalizeStocksInput(@Nullable String input) {
@@ -230,6 +233,15 @@ public final class StockWatcherSettings implements PersistentStateComponent<Stoc
         state.visibleColumns = columns.isEmpty() ? null : columns;
         state.refreshIntervalSeconds = clampRefreshIntervalSeconds(state.refreshIntervalSeconds == null ? DEFAULT_REFRESH_INTERVAL_SECONDS : state.refreshIntervalSeconds);
         state.cooldownMinutes = clampCooldownMinutes(state.cooldownMinutes == null ? DEFAULT_COOLDOWN_MINUTES : state.cooldownMinutes);
+        Map<String, Double> up = normalizeThresholdMap(state.perStockUpThresholdPct == null ? Map.of() : state.perStockUpThresholdPct);
+        Map<String, Double> down = normalizeThresholdMap(state.perStockDownThresholdPct == null ? Map.of() : state.perStockDownThresholdPct);
+        if (up.isEmpty() && down.isEmpty() && state.perStockThresholdPct != null && !state.perStockThresholdPct.isEmpty()) {
+            Map<String, Double> legacy = normalizeThresholdMap(state.perStockThresholdPct);
+            up = legacy;
+            down = legacy;
+        }
+        state.perStockUpThresholdPct = up.isEmpty() ? null : up;
+        state.perStockDownThresholdPct = down.isEmpty() ? null : down;
         Map<String, Double> thresholds = normalizeThresholdMap(state.perStockThresholdPct == null ? Map.of() : state.perStockThresholdPct);
         state.perStockThresholdPct = thresholds.isEmpty() ? null : thresholds;
     }

@@ -4,6 +4,7 @@ import com.intellij.codeInsight.lookup.LookupManager;
 import com.aiden.plugin.viewpdf.settings.PdfViewerSettings;
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.editor.Editor;
+import com.intellij.openapi.editor.colors.EditorFontType;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.popup.JBPopup;
 import com.intellij.openapi.ui.popup.JBPopupFactory;
@@ -29,6 +30,7 @@ import javax.swing.SwingConstants;
 import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Dimension;
+import java.awt.Font;
 import java.awt.Point;
 import java.awt.Rectangle;
 import java.awt.Window;
@@ -93,6 +95,7 @@ public final class EditorWordLookupController {
         PdfViewerSettings settings = PdfViewerSettings.getInstance();
         Color bgColor = settings.getEditorWordPopupBackgroundColor();
         Color fontColor = settings.getEditorWordPopupFontColor();
+        Font editorFont = editor.getColorsScheme().getFont(EditorFontType.PLAIN);
 
         DefaultListModel<Item> model = new DefaultListModel<>();
         model.addElement(new Item(Kind.WORD, session.getCurrentWordDisplayText()));
@@ -103,6 +106,9 @@ public final class EditorWordLookupController {
         JList<Item> list = new JList<>(model);
         list.setOpaque(false);
         list.setBackground(new Color(0, 0, 0, 0));
+        if (editorFont != null) {
+            list.setFont(editorFont);
+        }
         list.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         list.setSelectedIndex(0);
         list.setFixedCellHeight(30);
@@ -122,12 +128,18 @@ public final class EditorWordLookupController {
             com.intellij.ui.components.JBLabel left = new com.intellij.ui.components.JBLabel(value == null ? "" : value.text, SwingConstants.LEFT);
             left.setOpaque(false);
             left.setForeground(withAlpha(fontColor, textAlpha));
+            if (editorFont != null) {
+                left.setFont(editorFont);
+            }
             row.add(left, BorderLayout.WEST);
 
             if (value != null && value.kind != Kind.WORD) {
                 com.intellij.ui.components.JBLabel right = new com.intellij.ui.components.JBLabel(value.shortcut, SwingConstants.RIGHT);
                 right.setOpaque(false);
                 right.setForeground(withAlpha(POPUP_SHORTCUT_COLOR, textAlpha));
+                if (editorFont != null) {
+                    right.setFont(editorFont);
+                }
                 row.add(right, BorderLayout.EAST);
             }
             return row;
