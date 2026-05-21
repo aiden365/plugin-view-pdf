@@ -31,6 +31,7 @@ import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Dimension;
 import java.awt.Font;
+import java.awt.IllegalComponentStateException;
 import java.awt.Point;
 import java.awt.Rectangle;
 import java.awt.Window;
@@ -380,8 +381,15 @@ public final class EditorWordLookupController {
         if (!window.isShowing() || editor.isDisposed() || !editor.getContentComponent().isShowing()) {
             return;
         }
-        Point local = window.getLocationOnScreen();
-        SwingUtilities.convertPointFromScreen(local, editor.getContentComponent());
+        Point windowOnScreen;
+        Point editorOnScreen;
+        try {
+            windowOnScreen = window.getLocationOnScreen();
+            editorOnScreen = editor.getContentComponent().getLocationOnScreen();
+        } catch (IllegalComponentStateException ignored) {
+            return;
+        }
+        Point local = new Point(windowOnScreen.x - editorOnScreen.x, windowOnScreen.y - editorOnScreen.y);
         PdfViewerSettings settings = PdfViewerSettings.getInstance();
         Color bg = settings.getEditorWordPopupBackgroundColor();
         Color font = settings.getEditorWordPopupFontColor();

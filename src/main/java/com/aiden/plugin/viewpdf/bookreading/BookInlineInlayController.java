@@ -3,6 +3,7 @@ package com.aiden.plugin.viewpdf.bookreading;
 import com.aiden.plugin.viewpdf.PdfViewerKeys;
 import com.aiden.plugin.viewpdf.settings.PdfViewerSettings;
 import com.intellij.openapi.Disposable;
+import com.intellij.openapi.ide.CopyPasteManager;
 import com.intellij.openapi.editor.Editor;
 import com.intellij.openapi.editor.Inlay;
 import com.intellij.openapi.editor.VisualPosition;
@@ -26,6 +27,8 @@ import java.awt.FontMetrics;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.Rectangle;
+import java.awt.datatransfer.StringSelection;
+import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.awt.event.MouseMotionAdapter;
 import java.util.List;
@@ -132,6 +135,7 @@ public final class BookInlineInlayController implements Disposable {
         editor.getDocument().addDocumentListener(documentListener);
         editor.getCaretModel().addCaretListener(caretListener);
         editor.getContentComponent().addMouseMotionListener(mouseMotionListener);
+        editor.getContentComponent().addMouseListener(mouseClickListener);
     }
 
     private void detach() {
@@ -139,6 +143,7 @@ public final class BookInlineInlayController implements Disposable {
             editor.getDocument().removeDocumentListener(documentListener);
             editor.getCaretModel().removeCaretListener(caretListener);
             editor.getContentComponent().removeMouseMotionListener(mouseMotionListener);
+            editor.getContentComponent().removeMouseListener(mouseClickListener);
             editor.getContentComponent().setToolTipText(null);
         }
         editor = null;
@@ -193,6 +198,34 @@ public final class BookInlineInlayController implements Disposable {
                 return;
             }
             currentEditor.getContentComponent().setToolTipText(null);
+        }
+    };
+
+    private final MouseAdapter mouseClickListener = new MouseAdapter() {
+        @Override
+        public void mousePressed(MouseEvent e) {
+            if (!e.isControlDown()) {
+                return;
+            }
+            if (!javax.swing.SwingUtilities.isLeftMouseButton(e)) {
+                return;
+            }
+            Editor currentEditor = editor;
+            Inlay<?> currentInline = inlineInlay;
+            Inlay<?> currentBlock = blockInlay;
+            String textToCopy = lastFullText;
+            if (currentEditor == null || currentInline == null || textToCopy == null) {
+                return;
+            }
+            Rectangle inlineBounds = currentInline.getBounds();
+            Rectangle blockBounds = currentBlock == null ? null : currentBlock.getBounds();
+            boolean hit = (inlineBounds != null && inlineBounds.contains(e.getPoint()))
+                    || (blockBounds != null && blockBounds.contains(e.getPoint()));
+            if (!hit) {
+                return;
+            }
+            CopyPasteManager.getInstance().setContents(new StringSelection(textToCopy));
+            e.consume();
         }
     };
 
