@@ -23,6 +23,7 @@ import javax.swing.JTable;
 import javax.swing.JTextArea;
 import javax.swing.JTextField;
 import javax.swing.JScrollPane;
+import javax.swing.SwingConstants;
 import javax.swing.SwingUtilities;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
@@ -90,8 +91,8 @@ public final class BookManagerPanel implements Disposable {
         tableModel = new BookTableModel(settings);
         table = new JTable(tableModel);
         table.setRowHeight(36);
-        table.getColumnModel().getColumn(1).setCellRenderer(new ActionCellRenderer());
-        table.getColumnModel().getColumn(1).setCellEditor(new ActionCellEditor());
+        table.getColumnModel().getColumn(2).setCellRenderer(new ActionCellRenderer());
+        table.getColumnModel().getColumn(2).setCellEditor(new ActionCellEditor());
         JScrollPane scrollPane = new JBScrollPane(table);
         rootPanel.add(scrollPane, BorderLayout.CENTER);
 
@@ -301,6 +302,26 @@ public final class BookManagerPanel implements Disposable {
         settings.deleteBook(book.id);
     }
 
+    private void jumpToLine(@NotNull PdfViewerSettings.BookData book) {
+        String input = JOptionPane.showInputDialog(rootPanel, "请输入行号", "跳转阅读位置", JOptionPane.PLAIN_MESSAGE);
+        if (input == null) {
+            return;
+        }
+        String trimmed = input.trim();
+        if (trimmed.isEmpty()) {
+            return;
+        }
+        int lineNumber;
+        try {
+            lineNumber = Integer.parseInt(trimmed);
+        } catch (Exception ignored) {
+            return;
+        }
+        int normalized = Math.max(1, lineNumber);
+        settings.setBookReadLine(book.id, normalized);
+        settings.setCurrentReadingBookId(book.id);
+    }
+
     private @Nullable VirtualFile chooseTxtFile(@Nullable String initialPath) {
         FileChooserDescriptor descriptor = new FileChooserDescriptor(
                 true,
@@ -374,6 +395,7 @@ public final class BookManagerPanel implements Disposable {
 
         JTextArea contentArea = new JTextArea(initialContent, 14, 48);
         JScrollPane scrollPane = new JBScrollPane(contentArea);
+        scrollPane.setRowHeaderView(createLineNumberView(contentArea));
         panel.add(scrollPane, BorderLayout.CENTER);
 
         while (true) {
@@ -442,6 +464,7 @@ public final class BookManagerPanel implements Disposable {
 
         JTextArea contentArea = new JTextArea(initialContent, 14, 48);
         JScrollPane scrollPane = new JBScrollPane(contentArea);
+        scrollPane.setRowHeaderView(createLineNumberView(contentArea));
         panel.add(scrollPane, BorderLayout.CENTER);
 
         if (reimportButton != null) {
@@ -491,8 +514,57 @@ public final class BookManagerPanel implements Disposable {
         return sb.toString();
     }
 
+    private static @NotNull JComponent createLineNumberView(@NotNull JTextArea target) {
+        JTextArea lineNumbers = new JTextArea("1");
+        lineNumbers.setEditable(false);
+        lineNumbers.setFocusable(false);
+        lineNumbers.setOpaque(false);
+        lineNumbers.setFont(target.getFont());
+        lineNumbers.setForeground(target.getForeground());
+        lineNumbers.setBackground(target.getBackground());
+        lineNumbers.setColumns(4);
+        lineNumbers.setBorder(BorderFactory.createEmptyBorder(2, 4, 2, 6));
+        lineNumbers.setAlignmentX(Component.RIGHT_ALIGNMENT);
+        lineNumbers.setComponentOrientation(target.getComponentOrientation());
+        lineNumbers.setLineWrap(false);
+        lineNumbers.setWrapStyleWord(false);
+        lineNumbers.setCaretPosition(0);
+        lineNumbers.setAutoscrolls(false);
+        updateLineNumbers(target, lineNumbers);
+        target.getDocument().addDocumentListener(new DocumentListener() {
+            @Override
+            public void insertUpdate(DocumentEvent e) {
+                updateLineNumbers(target, lineNumbers);
+            }
+
+            @Override
+            public void removeUpdate(DocumentEvent e) {
+                updateLineNumbers(target, lineNumbers);
+            }
+
+            @Override
+            public void changedUpdate(DocumentEvent e) {
+                updateLineNumbers(target, lineNumbers);
+            }
+        });
+        return lineNumbers;
+    }
+
+    private static void updateLineNumbers(@NotNull JTextArea target, @NotNull JTextArea lineNumbers) {
+        int lines = Math.max(1, target.getLineCount());
+        StringBuilder sb = new StringBuilder();
+        for (int i = 1; i <= lines; i++) {
+            if (i > 1) {
+                sb.append('\n');
+            }
+            sb.append(i);
+        }
+        lineNumbers.setText(sb.toString());
+        lineNumbers.setCaretPosition(0);
+    }
+
     private static final class BookTableModel extends AbstractTableModel {
-        private static final String[] COLUMNS = {"书名", "操作"};
+        private static final String[] COLUMNS = {"书名", "上次阅读", "操作"};
 
         private final PdfViewerSettings settings;
         private List<PdfViewerSettings.BookData> rows = List.of();
@@ -523,7 +595,7 @@ public final class BookManagerPanel implements Disposable {
 
         @Override
         public boolean isCellEditable(int rowIndex, int columnIndex) {
-            return columnIndex == 1;
+            return columnIndex == 2;
         }
 
         @Override
@@ -531,6 +603,9 @@ public final class BookManagerPanel implements Disposable {
             PdfViewerSettings.BookData book = rows.get(rowIndex);
             if (columnIndex == 0) {
                 return book.name == null ? "" : book.name;
+            }
+            if (columnIndex == 1) {
+                return settings.getBookReadLine(book.id);
             }
             return "";
         }
@@ -547,11 +622,13 @@ public final class BookManagerPanel implements Disposable {
         private final JPanel panel = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 0));
         private final JButton selectButton = new JButton();
         private final JButton editButton = new JButton("编辑");
+        private final JButton jumpButton = new JButton("跳转");
         private final JButton deleteButton = new JButton("删除");
 
         private ActionCellRenderer() {
             panel.add(selectButton);
             panel.add(editButton);
+            panel.add(jumpButton);
             panel.add(deleteButton);
         }
 
@@ -563,6 +640,7 @@ public final class BookManagerPanel implements Disposable {
             selectButton.setText(current ? "阅读中" : "选择/阅读");
             selectButton.setEnabled(!current);
             editButton.setEnabled(book != null);
+            jumpButton.setEnabled(book != null);
             deleteButton.setEnabled(book != null);
             return panel;
         }
@@ -572,12 +650,14 @@ public final class BookManagerPanel implements Disposable {
         private final JPanel panel = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 0));
         private final JButton selectButton = new JButton();
         private final JButton editButton = new JButton("编辑");
+        private final JButton jumpButton = new JButton("跳转");
         private final JButton deleteButton = new JButton("删除");
         private int editingRow = -1;
 
         private ActionCellEditor() {
             panel.add(selectButton);
             panel.add(editButton);
+            panel.add(jumpButton);
             panel.add(deleteButton);
 
             selectButton.addActionListener(e -> {
@@ -597,6 +677,17 @@ public final class BookManagerPanel implements Disposable {
                     PdfViewerSettings.BookData book = tableModel.getRow(row);
                     if (book != null) {
                         editBook(book);
+                    }
+                });
+                stopCellEditing();
+            });
+
+            jumpButton.addActionListener(e -> {
+                int row = editingRow;
+                SwingUtilities.invokeLater(() -> {
+                    PdfViewerSettings.BookData book = tableModel.getRow(row);
+                    if (book != null) {
+                        jumpToLine(book);
                     }
                 });
                 stopCellEditing();
@@ -623,6 +714,7 @@ public final class BookManagerPanel implements Disposable {
             selectButton.setText(current ? "阅读中" : "选择/阅读");
             selectButton.setEnabled(!current);
             editButton.setEnabled(book != null);
+            jumpButton.setEnabled(book != null);
             return panel;
         }
 

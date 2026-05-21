@@ -26,11 +26,12 @@ public final class BookReadingNotifier {
         if (book == null) {
             return;
         }
-        String firstLine = readLine(book.inlineContent, 1);
-        if (firstLine == null) {
+        int targetLine = settings.getBookReadLine(bookId);
+        String line = readLine(book.inlineContent, targetLine);
+        if (line == null) {
             return;
         }
-        notifyLine(project, firstLine);
+        notifyLine(project, line);
     }
 
     public static void moveAndShowCurrentLine(@NotNull Project project, int delta) {
@@ -58,6 +59,9 @@ public final class BookReadingNotifier {
 
     private static void notifyLine(@NotNull Project project, @NotNull String lineText) {
         String content = escape(lineText);
+        if (content.isEmpty()) {
+            content = " ";
+        }
         NotificationGroupManager.getInstance()
                 .getNotificationGroup(NOTIFICATION_GROUP_ID)
                 .createNotification(content, NotificationType.INFORMATION)

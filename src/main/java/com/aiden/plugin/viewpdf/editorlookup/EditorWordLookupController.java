@@ -44,6 +44,7 @@ import java.awt.event.MouseEvent;
 
 public final class EditorWordLookupController {
     private static final Key<JBPopup> ACTIVE_POPUP_KEY = Key.create("EditorWordPopupListPopup");
+    private static final Key<Window> ACTIVE_POPUP_WINDOW_KEY = Key.create("EditorWordPopupListPopupWindow");
     private static final int MIN_MARGIN = 8;
     private static final int POPUP_BORDER_WIDTH = 8;
     private static final Color POPUP_BORDER_COLOR = new Color(70, 70, 70);
@@ -89,6 +90,10 @@ public final class EditorWordLookupController {
 
         JBPopup existing = project.getUserData(ACTIVE_POPUP_KEY);
         if (existing != null && !existing.isDisposed()) {
+            Window existingWindow = project.getUserData(ACTIVE_POPUP_WINDOW_KEY);
+            if (existingWindow != null) {
+                persistWindowBounds(editor, existingWindow);
+            }
             existing.cancel();
         }
 
@@ -179,6 +184,7 @@ public final class EditorWordLookupController {
         Window[] trackedWindow = new Window[1];
         Point[] dragAnchorOnScreen = new Point[1];
         Point[] dragWindowStartOnScreen = new Point[1];
+        boolean[] windowTrackerAttached = new boolean[]{false};
 
         ComponentAdapter windowTracker = new ComponentAdapter() {
             @Override
@@ -268,6 +274,7 @@ public final class EditorWordLookupController {
                     window.removeComponentListener(windowTracker);
                 }
                 project.putUserData(ACTIVE_POPUP_KEY, null);
+                project.putUserData(ACTIVE_POPUP_WINDOW_KEY, null);
             }
         });
 
@@ -284,11 +291,15 @@ public final class EditorWordLookupController {
                 return;
             }
             trackedWindow[0] = window;
+            project.putUserData(ACTIVE_POPUP_WINDOW_KEY, window);
             try {
                 window.setBackground(new Color(0, 0, 0, 0));
             } catch (Throwable ignored) {
             }
-            window.addComponentListener(windowTracker);
+            if (!windowTrackerAttached[0]) {
+                window.addComponentListener(windowTracker);
+                windowTrackerAttached[0] = true;
+            }
         });
 
         MouseAdapter ctrlDragListener = new MouseAdapter() {
@@ -309,12 +320,20 @@ public final class EditorWordLookupController {
                     dragWindowStartOnScreen[0] = null;
                     return;
                 }
+                if (!windowTrackerAttached[0]) {
+                    window.addComponentListener(windowTracker);
+                    windowTrackerAttached[0] = true;
+                }
                 dragAnchorOnScreen[0] = e.getLocationOnScreen();
                 dragWindowStartOnScreen[0] = window.getLocationOnScreen();
             }
 
             @Override
             public void mouseReleased(MouseEvent e) {
+                Window window = trackedWindow[0];
+                if (window != null) {
+                    persistWindowBounds(editor, window);
+                }
                 dragAnchorOnScreen[0] = null;
                 dragWindowStartOnScreen[0] = null;
             }
@@ -334,6 +353,11 @@ public final class EditorWordLookupController {
                 int dx = now.x - anchor.x;
                 int dy = now.y - anchor.y;
                 window.setLocation(start.x + dx, start.y + dy);
+                if (persistTimer[0] == null) {
+                    persistTimer[0] = new Timer(150, ev -> persistWindowBounds(editor, window));
+                    persistTimer[0].setRepeats(false);
+                }
+                persistTimer[0].restart();
             }
         };
         root.addMouseListener(ctrlDragListener);
@@ -353,6 +377,9 @@ public final class EditorWordLookupController {
     }
 
     private static void persistWindowBounds(@NotNull Editor editor, @NotNull Window window) {
+        if (!window.isShowing() || editor.isDisposed() || !editor.getContentComponent().isShowing()) {
+            return;
+        }
         Point local = window.getLocationOnScreen();
         SwingUtilities.convertPointFromScreen(local, editor.getContentComponent());
         PdfViewerSettings settings = PdfViewerSettings.getInstance();

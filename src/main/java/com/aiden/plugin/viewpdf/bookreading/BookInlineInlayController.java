@@ -21,6 +21,7 @@ import org.jetbrains.annotations.Nullable;
 import java.awt.AlphaComposite;
 import java.awt.Color;
 import java.awt.Composite;
+import java.awt.Font;
 import java.awt.FontMetrics;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
@@ -87,15 +88,22 @@ public final class BookInlineInlayController implements Disposable {
             return;
         }
         clearInlay();
-        FontMetrics metrics = editor.getContentComponent().getFontMetrics(editor.getColorsScheme().getFont(EditorFontType.PLAIN));
+        if (lineText.isEmpty()) {
+            lineText = " ";
+        }
+        Font font = resolvePaintFont(editor, lineText);
+        FontMetrics metrics = editor.getContentComponent().getFontMetrics(font);
         int maxWidth = resolveAvailableWidth(editor);
         List<String> wrapped = BookReadingTextUtil.wrapToWidth(lineText, maxWidth, metrics);
-        String first = wrapped.isEmpty() ? "" : wrapped.get(0);
+        String first = wrapped.isEmpty() ? " " : wrapped.get(0);
+        if (first.isEmpty()) {
+            first = " ";
+        }
         List<String> rest = wrapped.size() <= 1 ? List.of() : wrapped.subList(1, wrapped.size());
         this.lastFullText = lineText;
         this.tooltipText = rest.isEmpty() ? null : lineText;
         this.lastOffset = offset;
-        this.inlineInlay = editor.getInlayModel().addInlineElement(offset, true, new InlineTextRenderer(first));
+        this.inlineInlay = editor.getInlayModel().addInlineElement(offset, true, new InlineTextRenderer(first, font));
         if (!rest.isEmpty()) {
             int line = editor.getDocument().getLineNumber(offset);
             int lineEndOffset = editor.getDocument().getLineEndOffset(line);
@@ -105,7 +113,7 @@ public final class BookInlineInlayController implements Disposable {
                     true,
                     false,
                     0,
-                    new BlockTextRenderer(rest, indentPx)
+                    new BlockTextRenderer(rest, indentPx, font)
             );
         }
     }
@@ -196,6 +204,14 @@ public final class BookInlineInlayController implements Disposable {
         return Math.max(24, available);
     }
 
+    private static @NotNull Font resolvePaintFont(@NotNull Editor editor, @NotNull String text) {
+        Font base = editor.getColorsScheme().getFont(EditorFontType.PLAIN);
+        if (base.canDisplayUpTo(text) == -1) {
+            return base;
+        }
+        return new Font("Dialog", base.getStyle(), base.getSize());
+    }
+
     private static @Nullable PdfViewerSettings.BookData findBookById(@NotNull List<PdfViewerSettings.BookData> books, @NotNull String bookId) {
         for (PdfViewerSettings.BookData book : books) {
             if (book == null || book.id == null) {
@@ -210,29 +226,31 @@ public final class BookInlineInlayController implements Disposable {
 
     private static final class InlineTextRenderer implements com.intellij.openapi.editor.EditorCustomElementRenderer {
         private final String text;
+        private final Font font;
 
-        private InlineTextRenderer(@NotNull String text) {
+        private InlineTextRenderer(@NotNull String text, @NotNull Font font) {
             this.text = text;
+            this.font = font;
         }
 
         @Override
         public int calcWidthInPixels(@NotNull Inlay inlay) {
             Editor editor = inlay.getEditor();
-            FontMetrics metrics = editor.getContentComponent().getFontMetrics(editor.getColorsScheme().getFont(EditorFontType.PLAIN));
-            return metrics.stringWidth(text);
+            FontMetrics metrics = editor.getContentComponent().getFontMetrics(font);
+            return Math.max(1, metrics.stringWidth(text));
         }
 
         @Override
         public void paint(@NotNull Inlay inlay, @NotNull Graphics g, @NotNull Rectangle targetRegion, @NotNull TextAttributes textAttributes) {
             Editor editor = inlay.getEditor();
-            FontMetrics metrics = editor.getContentComponent().getFontMetrics(editor.getColorsScheme().getFont(EditorFontType.PLAIN));
+            FontMetrics metrics = editor.getContentComponent().getFontMetrics(font);
             int x = targetRegion.x;
             int y = targetRegion.y + metrics.getAscent();
             Graphics2D g2 = (Graphics2D) g;
             Composite old = g2.getComposite();
             g2.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 0.45f));
             g2.setColor(editor.getColorsScheme().getDefaultForeground() == null ? JBColor.GRAY : editor.getColorsScheme().getDefaultForeground());
-            g2.setFont(editor.getColorsScheme().getFont(EditorFontType.PLAIN));
+            g2.setFont(font);
             g2.drawString(text, x, y);
             g2.setComposite(old);
         }
@@ -241,16 +259,18 @@ public final class BookInlineInlayController implements Disposable {
     private static final class BlockTextRenderer implements com.intellij.openapi.editor.EditorCustomElementRenderer {
         private final List<String> lines;
         private final int indentPx;
+        private final Font font;
 
-        private BlockTextRenderer(@NotNull List<String> lines, int indentPx) {
+        private BlockTextRenderer(@NotNull List<String> lines, int indentPx, @NotNull Font font) {
             this.lines = List.copyOf(lines);
             this.indentPx = Math.max(0, indentPx);
+            this.font = font;
         }
 
         @Override
         public int calcWidthInPixels(@NotNull Inlay inlay) {
             Editor editor = inlay.getEditor();
-            FontMetrics metrics = editor.getContentComponent().getFontMetrics(editor.getColorsScheme().getFont(EditorFontType.PLAIN));
+            FontMetrics metrics = editor.getContentComponent().getFontMetrics(font);
             int max = 0;
             for (String line : lines) {
                 if (line == null) {
@@ -258,7 +278,7 @@ public final class BookInlineInlayController implements Disposable {
                 }
                 max = Math.max(max, metrics.stringWidth(line));
             }
-            return indentPx + max;
+            return Math.max(1, indentPx + max);
         }
 
         @Override
@@ -271,13 +291,13 @@ public final class BookInlineInlayController implements Disposable {
         @Override
         public void paint(@NotNull Inlay inlay, @NotNull Graphics g, @NotNull Rectangle targetRegion, @NotNull TextAttributes textAttributes) {
             Editor editor = inlay.getEditor();
-            FontMetrics metrics = editor.getContentComponent().getFontMetrics(editor.getColorsScheme().getFont(EditorFontType.PLAIN));
+            FontMetrics metrics = editor.getContentComponent().getFontMetrics(font);
             int lineHeight = editor.getLineHeight();
             Graphics2D g2 = (Graphics2D) g;
             Composite old = g2.getComposite();
             g2.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 0.45f));
             g2.setColor(editor.getColorsScheme().getDefaultForeground() == null ? JBColor.GRAY : editor.getColorsScheme().getDefaultForeground());
-            g2.setFont(editor.getColorsScheme().getFont(EditorFontType.PLAIN));
+            g2.setFont(font);
             int x = targetRegion.x + indentPx;
             int y = targetRegion.y + metrics.getAscent();
             for (int i = 0; i < lines.size(); i++) {
